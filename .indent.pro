@@ -49,10 +49,13 @@
 -T lxw_cell
 -T lxw_chart
 -T lxw_chart_axis
+-T lxw_chart_fill
 -T lxw_chart_font
+-T lxw_chart_legend
+-T lxw_chart_legend_position
 -T lxw_chart_series
 -T lxw_chart_title
--T lxw_chart_types
+-T lxw_chart_type
 -T lxw_col_options
 -T lxw_col_t
 -T lxw_color_t

@@ -3,7 +3,7 @@
  * used to define a user friendly name to represent a value, a single cell or
  * a range of cells in a workbook.
  *
- * Copyright 2014-2016, John McNamara, jmcnamara@cpan.org
+ * Copyright 2014-2017, John McNamara, jmcnamara@cpan.org
  *
  */
 
@@ -11,7 +11,7 @@
 
 int main() {
 
-    lxw_workbook  *workbook   = workbook_new("defined_name.xlsx");
+    lxw_workbook  *workbook = workbook_new("defined_name.xlsx");
     lxw_worksheet *worksheet;
 
     /* We don't use the returned worksheets in this example and use a generic
@@ -28,7 +28,7 @@ int main() {
     /* Define a local/worksheet name. */
     workbook_define_name(workbook, "Sheet2!Sales",  "=Sheet2!$G$1:$G$10");
 
-    /* Write some text to the worksheets and a defined names in a formula. */
+    /* Write some text to the worksheets and one of the defined name in a formula. */
     LXW_FOREACH_WORKSHEET(worksheet, workbook){
         worksheet_set_column(worksheet, 0, 0, 45, NULL);
 

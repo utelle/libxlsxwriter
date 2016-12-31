@@ -1,7 +1,7 @@
 /*
  * libxlsxwriter
  *
- * Copyright 2014-2016, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
+ * Copyright 2014-2017, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
  */
 
 /**
@@ -430,7 +430,6 @@ typedef struct lxw_font {
     uint16_t font_size;
     uint8_t bold;
     uint8_t italic;
-    lxw_color_t font_color;
     uint8_t underline;
     uint8_t font_strikeout;
     uint8_t font_outline;
@@ -440,6 +439,7 @@ typedef struct lxw_font {
     uint8_t font_charset;
     uint8_t font_condense;
     uint8_t font_extend;
+    lxw_color_t font_color;
 } lxw_font;
 
 /*
@@ -486,6 +486,8 @@ int32_t lxw_format_get_xf_index(lxw_format *format);
 lxw_font *lxw_format_get_font_key(lxw_format *format);
 lxw_border *lxw_format_get_border_key(lxw_format *format);
 lxw_fill *lxw_format_get_fill_key(lxw_format *format);
+
+lxw_color_t lxw_format_check_color(lxw_color_t color);
 
 /**
  * @brief Set the font used in the cell.

@@ -2,7 +2,7 @@
 #
 # Base test class for libxlsxwriter functional tests.
 #
-# Copyright 2014-2016, John McNamara, jmcnamara@cpan.org
+# Copyright 2014-2017, John McNamara, jmcnamara@cpan.org
 #
 
 import unittest
@@ -46,7 +46,7 @@ class XLSXBaseTest(unittest.TestCase):
                                        self.exp_filename,
                                        self.ignore_files,
                                        self.ignore_elements)
-        self.assertEqual(got, exp)
+        self.assertEqual(exp, got)
 
     def tearDown(self):
         # Cleanup.

@@ -1,7 +1,7 @@
 /*
  * libxlsxwriter
  *
- * Copyright 2014-2016, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
+ * Copyright 2014-2017, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
  *
  * chart - A libxlsxwriter library for creating Excel XLSX chart files.
  *
@@ -75,6 +75,7 @@
 #include <string.h>
 
 #include "common.h"
+#include "format.h"
 
 STAILQ_HEAD(lxw_chart_series_list, lxw_chart_series);
 STAILQ_HEAD(lxw_series_data_points, lxw_series_data_point);
@@ -82,7 +83,7 @@ STAILQ_HEAD(lxw_series_data_points, lxw_series_data_point);
 #define LXW_CHART_NUM_FORMAT_LEN 128
 
 /** Available chart types . */
-typedef enum lxw_chart_types {
+typedef enum lxw_chart_type {
 
     /** None. */
     LXW_CHART_NONE = 0,
@@ -146,32 +147,57 @@ typedef enum lxw_chart_types {
 
     /** Radar chart - filled. */
     LXW_CHART_RADAR_FILLED
-} lxw_chart_types;
+} lxw_chart_type;
 
-enum lxw_chart_subtypes {
+/** Chart legend positions. */
+typedef enum lxw_chart_legend_position {
+
+    /** No chart legend. */
+    LXW_CHART_LEGEND_NONE = 0,
+
+    /** Chart legend positioned at right side. */
+    LXW_CHART_LEGEND_RIGHT,
+
+    /** Chart legend positioned at left side. */
+    LXW_CHART_LEGEND_LEFT,
+
+    /** Chart legend positioned at top. */
+    LXW_CHART_LEGEND_TOP,
+
+    /** Chart legend positioned at bottom. */
+    LXW_CHART_LEGEND_BOTTOM,
+
+    /** Chart legend overlaid at right side. */
+    LXW_CHART_LEGEND_OVERLAY_RIGHT,
+
+    /** Chart legend overlaid at left side. */
+    LXW_CHART_LEGEND_OVERLAY_LEFT
+} lxw_chart_legend_position;
+
+enum lxw_chart_subtype {
 
     LXW_CHART_SUBTYPE_NONE = 0,
     LXW_CHART_SUBTYPE_STACKED,
     LXW_CHART_SUBTYPE_STACKED_PERCENT
 };
 
-enum lxw_chart_groupings {
+enum lxw_chart_grouping {
     LXW_GROUPING_CLUSTERED,
     LXW_GROUPING_STANDARD,
     LXW_GROUPING_PERCENTSTACKED,
     LXW_GROUPING_STACKED
 };
 
-enum lxw_chart_axis_positions {
+enum lxw_chart_axis_tick_position {
     LXW_CHART_AXIS_POSITION_BETWEEN,
     LXW_CHART_AXIS_POSITION_ON_TICK
 };
 
-enum lxw_chart_positions {
-    LXW_CHART_RIGHT,
-    LXW_CHART_LEFT,
-    LXW_CHART_TOP,
-    LXW_CHART_BOTTOM
+enum lxw_chart_position {
+    LXW_CHART_AXIS_RIGHT,
+    LXW_CHART_AXIS_LEFT,
+    LXW_CHART_AXIS_TOP,
+    LXW_CHART_AXIS_BOTTOM
 };
 
 typedef struct lxw_series_range {
@@ -199,18 +225,62 @@ typedef struct lxw_series_data_point {
 
 } lxw_series_data_point;
 
+typedef struct lxw_chart_fill {
+
+    lxw_color_t color;
+    uint8_t transparency;
+    uint8_t has_color;
+
+} lxw_chart_fill;
+
+/**
+ * @brief Struct to represent a chart font.
+ *
+ * See @ref chart_fonts.
+ */
 typedef struct lxw_chart_font {
 
+    /** The chart font name, such as "Arial" or "Calibri". */
+    char *name;
+
+    /** The chart font size. The default is 11. */
+    uint16_t size;
+
+    /** The chart font bold property. Set to 0 or 1. */
     uint8_t bold;
 
+    /** The chart font italic property. Set to 0 or 1. */
+    uint8_t italic;
+
+    /** The chart font underline property. Set to 0 or 1. */
+    uint8_t underline;
+
+    /** The chart font rotation property. Range: -90 to 90. */
+    int32_t rotation;
+
+    /** The chart font color. See @ref working_with_colors. */
+    lxw_color_t color;
+
+    uint8_t pitch_family;
+    uint8_t charset;
+    int8_t baseline;
+    uint8_t has_color;
+
 } lxw_chart_font;
+
+typedef struct lxw_chart_legend {
+
+    lxw_chart_font *font;
+    uint8_t position;
+
+} lxw_chart_legend;
 
 typedef struct lxw_chart_title {
 
     char *name;
     lxw_row_t row;
     lxw_col_t col;
-    lxw_chart_font font;
+    lxw_chart_font *font;
     uint8_t off;
     uint8_t is_horizontal;
     uint8_t ignore_cache;
@@ -241,9 +311,10 @@ typedef struct lxw_chart_series {
 } lxw_chart_series;
 
 /**
- * @brief Struct to represent an Excel chart axis. It is used in functions
- * that modify a chart axis but the members of the struct aren't modified
- * directly.
+ * @brief Struct to represent an Excel chart axis.
+ *
+ * The lxw_chart_axis struct is used in functions that modify a chart axis
+ * but the members of the struct aren't modified directly.
  */
 typedef struct lxw_chart_axis {
 
@@ -254,6 +325,9 @@ typedef struct lxw_chart_axis {
 
     uint8_t default_major_gridlines;
     uint8_t major_tick_mark;
+
+    uint8_t is_horizontal;
+    lxw_chart_font *num_font;
 
 } lxw_chart_axis;
 
@@ -281,8 +355,8 @@ typedef struct lxw_chart {
     lxw_chart_axis *x_axis;
 
     /**
-     * A pointer to the chart x_axis object which can be used in functions
-     * that configures the X axis.
+     * A pointer to the chart y_axis object which can be used in functions
+     * that configures the Y axis.
      */
     lxw_chart_axis *y_axis;
 
@@ -314,6 +388,10 @@ typedef struct lxw_chart {
     uint8_t cross_between;
     uint8_t cat_axis_position;
     uint8_t val_axis_position;
+
+    lxw_chart_legend legend;
+    int16_t *delete_series;
+    uint16_t delete_series_count;
 
     struct lxw_chart_series_list *series_list;
 
@@ -577,6 +655,50 @@ void chart_axis_set_name(lxw_chart_axis *axis, const char *name);
  */
 void chart_axis_set_name_range(lxw_chart_axis *axis, const char *sheetname,
                                lxw_row_t row, lxw_col_t col);
+
+/**
+ * @brief  Set the font properties for a chart axis name.
+ *
+ * @param axis  A pointer to a chart #lxw_chart_axis object.
+ * @param font  A pointer to a chart #lxw_chart_font font struct.
+ *
+ * The `%chart_axis_set_name_font()` function is used to set the font of an
+ * axis name:
+ *
+ * @code
+ *     lxw_chart_font font = {.bold = LXW_TRUE, .color = LXW_COLOR_BLUE};
+ *
+ *     chart_axis_set_name(chart->x_axis, "Yearly data");
+ *     chart_axis_set_name_font(chart->x_axis, &font);
+ * @endcode
+ *
+ * @image html chart_axis_set_name_font.png
+ *
+ * For more information see @ref chart_fonts.
+ */
+void chart_axis_set_name_font(lxw_chart_axis *axis, lxw_chart_font *font);
+
+/**
+ * @brief  Set the font properties for the numbers of a chart axis.
+ *
+ * @param axis  A pointer to a chart #lxw_chart_axis object.
+ * @param font  A pointer to a chart #lxw_chart_font font struct.
+ *
+ * The `%chart_axis_set_num_font()` function is used to set the font of the
+ * numbers on an axis:
+ *
+ * @code
+ *     lxw_chart_font font = {.bold = LXW_TRUE, .color = LXW_COLOR_BLUE};
+ *
+ *     chart_axis_set_num_font(chart->x_axis, &font1);
+ * @endcode
+ *
+ * @image html chart_axis_set_num_font.png
+ *
+ * For more information see @ref chart_fonts.
+ */
+void chart_axis_set_num_font(lxw_chart_axis *axis, lxw_chart_font *font);
+
 /**
  * @brief Set the title of the chart.
  *
@@ -624,6 +746,29 @@ void chart_title_set_name(lxw_chart *chart, const char *name);
  */
 void chart_title_set_name_range(lxw_chart *chart, const char *sheetname,
                                 lxw_row_t row, lxw_col_t col);
+
+/**
+ * @brief  Set the font properties for a chart title.
+ *
+ * @param chart Pointer to a lxw_chart instance to be configured.
+ * @param font  A pointer to a chart #lxw_chart_font font struct.
+ *
+ * The `%chart_title_set_name_font()` function is used to set the font of a
+ * chart title:
+ *
+ * @code
+ *     lxw_chart_font font = {.bold = LXW_TRUE, .color = LXW_COLOR_BLUE};
+ *
+ *     chart_title_set_name(chart, "Year End Results");
+ *     chart_title_set_name_font(chart, &font);
+ * @endcode
+ *
+ * @image html chart_title_set_name_font.png
+ *
+ * For more information see @ref chart_fonts.
+ */
+void chart_title_set_name_font(lxw_chart *chart, lxw_chart_font *font);
+
 /**
  * @brief Turn off an automatic chart title.
  *
@@ -640,6 +785,91 @@ void chart_title_set_name_range(lxw_chart *chart, const char *sheetname,
  * @endcode
  */
 void chart_title_off(lxw_chart *chart);
+
+/**
+ * @brief Set the position of the chart legend.
+ *
+ * @param chart    Pointer to a lxw_chart instance to be configured.
+ * @param position The #lxw_chart_legend_position value for the legend.
+ *
+ * The `%chart_legend_set_position()` function is used to set the chart
+ * legend to one of the #lxw_chart_legend_position values:
+ *
+ *     LXW_CHART_LEGEND_NONE
+ *     LXW_CHART_LEGEND_RIGHT
+ *     LXW_CHART_LEGEND_LEFT
+ *     LXW_CHART_LEGEND_TOP
+ *     LXW_CHART_LEGEND_BOTTOM
+ *     LXW_CHART_LEGEND_OVERLAY_RIGHT
+ *     LXW_CHART_LEGEND_OVERLAY_LEFT
+ *
+ * For example:
+ *
+ * @code
+ *     chart_legend_set_position(chart, LXW_CHART_LEGEND_BOTTOM);
+ * @endcode
+ *
+ * @image html chart_legend_bottom.png
+ *
+ * This function can also be used to turn off a chart legend:
+ *
+ * @code
+ *     chart_legend_set_position(chart, LXW_CHART_LEGEND_NONE);
+ * @endcode
+ *
+ * @image html chart_legend_none.png
+ *
+ */
+void chart_legend_set_position(lxw_chart *chart, uint8_t position);
+
+/**
+ * @brief Set the font properties for a chart legend.
+ *
+ * @param chart Pointer to a lxw_chart instance to be configured.
+ * @param font  A pointer to a chart #lxw_chart_font font struct.
+ *
+ * The `%chart_legend_set_font()` function is used to set the font of a
+ * chart legend:
+ *
+ * @code
+ *     lxw_chart_font font = {.bold = LXW_TRUE, .color = LXW_COLOR_BLUE};
+ *
+ *     chart_legend_set_font(chart, &font);
+ * @endcode
+ *
+ * @image html chart_legend_set_font.png
+ *
+ * For more information see @ref chart_fonts.
+ */
+void chart_legend_set_font(lxw_chart *chart, lxw_chart_font *font);
+
+/**
+ * @brief Remove one or more series from the the legend.
+ *
+ * @param chart         Pointer to a lxw_chart instance to be configured.
+ * @param delete_series An array of zero-indexed values to delete from series.
+ *
+ * @return A #lxw_error.
+ *
+ * The `%chart_legend_delete_series()` function allows you to remove/hide one
+ * or more series in a chart legend (the series will still display on the chart).
+ *
+ * This function takes an array of one or more zero indexed series
+ * numbers. The array should be terminated with -1.
+ *
+ * For example to remove the first and third zero-indexed series from the
+ * legend of a chart with 3 series:
+ *
+ * @code
+ *     int16_t series[] = {0, 2, -1};
+ *
+ *     chart_legend_delete_series(chart, series);
+ * @endcode
+ *
+ * @image html chart_legend_delete.png
+ */
+lxw_error chart_legend_delete_series(lxw_chart *chart,
+                                     int16_t delete_series[]);
 
 /**
  * @brief Set the chart style type.
@@ -681,6 +911,7 @@ int lxw_chart_add_data_cache(lxw_series_range *range, uint8_t *data,
 #ifdef TESTING
 
 STATIC void _chart_xml_declaration(lxw_chart *chart);
+STATIC void _chart_write_legend(lxw_chart *chart);
 
 #endif /* TESTING */
 

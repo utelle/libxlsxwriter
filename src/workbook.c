@@ -3,7 +3,7 @@
  *
  * Used in conjunction with the libxlsxwriter library.
  *
- * Copyright 2014-2016, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
+ * Copyright 2014-2017, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
  *
  */
 
@@ -489,8 +489,8 @@ _store_defined_name(lxw_workbook *self, const char *name,
     if (!name || !formula)
         return LXW_ERROR_NULL_PARAMETER_IGNORED;
 
-    if (strlen(name) > LXW_DEFINED_NAME_LENGTH ||
-        strlen(formula) > LXW_DEFINED_NAME_LENGTH) {
+    if (lxw_utf8_strlen(name) > LXW_DEFINED_NAME_LENGTH ||
+        lxw_utf8_strlen(formula) > LXW_DEFINED_NAME_LENGTH) {
         return LXW_ERROR_128_STRING_LENGTH_EXCEEDED;
     }
 
@@ -1388,18 +1388,14 @@ workbook_add_worksheet(lxw_workbook *self, const char *sheetname)
 {
     lxw_worksheet *worksheet;
     lxw_worksheet_name *worksheet_name = NULL;
+    lxw_error error;
     lxw_worksheet_init_data init_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     char *new_name = NULL;
 
     if (sheetname) {
         /* Use the user supplied name. */
-        if (strlen(sheetname) > LXW_SHEETNAME_MAX) {
-            return NULL;
-        }
-        else {
-            init_data.name = lxw_strdup(sheetname);
-            init_data.quoted_name = lxw_quote_sheetname((char *) sheetname);
-        }
+        init_data.name = lxw_strdup(sheetname);
+        init_data.quoted_name = lxw_quote_sheetname((char *) sheetname);
     }
     else {
         /* Use the default SheetN name. */
@@ -1412,16 +1408,17 @@ workbook_add_worksheet(lxw_workbook *self, const char *sheetname)
         init_data.quoted_name = lxw_strdup(new_name);
     }
 
+    /* Check that the worksheet name is valid. */
+    error = workbook_validate_worksheet_name(self, init_data.name);
+    if (error) {
+        LXW_WARN_FORMAT2("workbook_add_worksheet(): worksheet name '%s' has "
+                         "error: %s", init_data.name, lxw_strerror(error));
+        goto mem_error;
+    }
+
     /* Create a struct to find/store the worksheet name/pointer. */
     worksheet_name = calloc(1, sizeof(struct lxw_worksheet_name));
     GOTO_LABEL_ON_MEM_ERROR(worksheet_name, mem_error);
-
-    /* Check if the worksheet name is already in use. */
-    if (workbook_get_worksheet_by_name(self, init_data.name)) {
-        LXW_WARN_FORMAT1("workbook_add_worksheet(): worksheet name '%s' "
-                         "already exists.", init_data.name);
-        goto mem_error;
-    }
 
     /* Initialize the metadata to pass to the worksheet. */
     init_data.hidden = 0;
@@ -1681,13 +1678,13 @@ workbook_set_custom_property_string(lxw_workbook *self, const char *name,
         return LXW_ERROR_NULL_PARAMETER_IGNORED;
     }
 
-    if (strlen(name) > 255) {
+    if (lxw_utf8_strlen(name) > 255) {
         LXW_WARN_FORMAT("workbook_set_custom_property_string(): parameter "
                         "'name' exceeds Excel length limit of 255.");
         return LXW_ERROR_255_STRING_LENGTH_EXCEEDED;
     }
 
-    if (strlen(value) > 255) {
+    if (lxw_utf8_strlen(value) > 255) {
         LXW_WARN_FORMAT("workbook_set_custom_property_string(): parameter "
                         "'value' exceeds Excel length limit of 255.");
         return LXW_ERROR_255_STRING_LENGTH_EXCEEDED;
@@ -1722,7 +1719,7 @@ workbook_set_custom_property_number(lxw_workbook *self, const char *name,
         return LXW_ERROR_NULL_PARAMETER_IGNORED;
     }
 
-    if (strlen(name) > 255) {
+    if (lxw_utf8_strlen(name) > 255) {
         LXW_WARN_FORMAT("workbook_set_custom_property_number(): parameter "
                         "'name' exceeds Excel length limit of 255.");
         return LXW_ERROR_255_STRING_LENGTH_EXCEEDED;
@@ -1792,7 +1789,7 @@ workbook_set_custom_property_boolean(lxw_workbook *self, const char *name,
         return LXW_ERROR_NULL_PARAMETER_IGNORED;
     }
 
-    if (strlen(name) > 255) {
+    if (lxw_utf8_strlen(name) > 255) {
         LXW_WARN_FORMAT("workbook_set_custom_property_boolean(): parameter "
                         "'name' exceeds Excel length limit of 255.");
         return LXW_ERROR_255_STRING_LENGTH_EXCEEDED;
@@ -1827,7 +1824,7 @@ workbook_set_custom_property_datetime(lxw_workbook *self, const char *name,
         return LXW_ERROR_NULL_PARAMETER_IGNORED;
     }
 
-    if (strlen(name) > 255) {
+    if (lxw_utf8_strlen(name) > 255) {
         LXW_WARN_FORMAT("workbook_set_custom_property_datetime(): parameter "
                         "'name' exceeds Excel length limit of 255.");
         return LXW_ERROR_NULL_PARAMETER_IGNORED;
@@ -1854,6 +1851,9 @@ workbook_set_custom_property_datetime(lxw_workbook *self, const char *name,
     return LXW_NO_ERROR;
 }
 
+/*
+ * Get a worksheet object from its name.
+ */
 lxw_worksheet *
 workbook_get_worksheet_by_name(lxw_workbook *self, const char *name)
 {
@@ -1871,4 +1871,25 @@ workbook_get_worksheet_by_name(lxw_workbook *self, const char *name)
         return found->worksheet;
     else
         return NULL;
+}
+
+/*
+ * Validate the worksheet name based on Excel's rules.
+ */
+lxw_error
+workbook_validate_worksheet_name(lxw_workbook *self, const char *sheetname)
+{
+    /* Check the UTF-8 length of the worksheet name. */
+    if (lxw_utf8_strlen(sheetname) > LXW_SHEETNAME_MAX)
+        return LXW_ERROR_SHEETNAME_LENGTH_EXCEEDED;
+
+    /* Check that the worksheet name doesn't contain invalid characters. */
+    if (strpbrk(sheetname, "[]:*?/\\"))
+        return LXW_ERROR_INVALID_SHEETNAME_CHARACTER;
+
+    /* Check if the worksheet name is already in use. */
+    if (workbook_get_worksheet_by_name(self, sheetname))
+        return LXW_ERROR_SHEETNAME_ALREADY_USED;
+
+    return LXW_NO_ERROR;
 }

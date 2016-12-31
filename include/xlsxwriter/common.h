@@ -1,7 +1,7 @@
 /*
  * libxlsxwriter
  *
- * Copyright 2014-2016, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
+ * Copyright 2014-2017, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
  */
 
 /**
@@ -9,7 +9,7 @@
  *
  * @brief Common functions and defines for the libxlsxwriter library.
  *
- * <!-- Copyright 2014-2016, John McNamara, jmcnamara@cpan.org -->
+ * <!-- Copyright 2014-2017, John McNamara, jmcnamara@cpan.org -->
  *
  */
 #ifndef __LXW_COMMON_H__
@@ -80,14 +80,23 @@ typedef enum lxw_error {
     /** Function parameter validation error. */
     LXW_ERROR_PARAMETER_VALIDATION,
 
-    /** String exceeds Excel's limit of 32,767 characters. */
-    LXW_ERROR_MAX_STRING_LENGTH_EXCEEDED,
+    /** Worksheet name exceeds Excel's limit of 31 characters. */
+    LXW_ERROR_SHEETNAME_LENGTH_EXCEEDED,
+
+    /** Worksheet name contains invalid Excel character: '[]:*?/\\' */
+    LXW_ERROR_INVALID_SHEETNAME_CHARACTER,
+
+    /** Worksheet name is already in use. */
+    LXW_ERROR_SHEETNAME_ALREADY_USED,
 
     /** Parameter exceeds Excel's limit of 128 characters. */
     LXW_ERROR_128_STRING_LENGTH_EXCEEDED,
 
     /** Parameter exceeds Excel's limit of 255 characters. */
     LXW_ERROR_255_STRING_LENGTH_EXCEEDED,
+
+    /** String exceeds Excel's limit of 32,767 characters. */
+    LXW_ERROR_MAX_STRING_LENGTH_EXCEEDED,
 
     /** Error finding internal string index. */
     LXW_ERROR_SHARED_STRING_INDEX_NOT_FOUND,
@@ -134,11 +143,11 @@ enum lxw_custom_property_types {
     LXW_CUSTOM_DATETIME
 };
 
-/* Excel sheetname max of 31 chars + \0. */
-#define LXW_SHEETNAME_MAX         32
+/* Excel sheetname max of 31 chars. */
+#define LXW_SHEETNAME_MAX         31
 
-/* Every worksheet char doubled + start and end quotes + \0. */
-#define LXW_MAX_SHEETNAME_LENGTH  65
+/* Max with all worksheet chars 4xUTF-8 bytes + start and end quotes + \0. */
+#define LXW_MAX_SHEETNAME_LENGTH  ((LXW_SHEETNAME_MAX * 4) + 2 + 1)
 
 /* Max col string length. */
 #define LXW_MAX_COL_NAME_LENGTH   sizeof("$XFD")
@@ -312,7 +321,6 @@ typedef struct lxw_custom_property {
     STAILQ_ENTRY (lxw_custom_property) list_pointers;
 
 } lxw_custom_property;
-
 
 /* Declarations required for unit testing. */
 #ifdef TESTING

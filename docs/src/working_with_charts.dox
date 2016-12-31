@@ -20,9 +20,87 @@ are displayed according to their value.
 Excel treats these two types of axis differently and exposes different
 properties for each.
 
-As such some of the `libxlsxwriter`` axis properties can be set for a value
+As such some of the `libxlsxwriter` axis properties can be set for a value
 axis, some can be set for a category axis and some properties can be set for
 both. The documentation calls out the type of axis to which functions apply.
+
+
+@section chart_fonts Working with Chart Fonts
+
+Font properties can be set for several chart objects such as chart titles,
+axis labels, and axis numbering.
+
+A chart font #lxw_chart_font struct with default properties is:
+
+@code
+    lxw_chart_font font = {.name      = "Calibri",
+                           .size      = 10,
+                           .bold      = LXW_FALSE,
+                           .italic    = LXW_FALSE,
+                           .underline = LXW_FALSE,
+                           .rotation  = 0,
+                           .color     = LXW_COLOR_BLACK};
+@endcode
+
+
+The font properties are:
+
+__name__: Set the font name:
+
+@code
+    lxw_chart_font font = {.name = "Arial"};
+@endcode
+
+
+__size__: Set the font size:
+
+@code
+    lxw_chart_font font = {.name = "Arial", .size = 11};
+@endcode
+
+__bold__: Set the font bold property:
+
+@code
+    lxw_chart_font font = {.bold = LXW_TRUE};
+@endcode
+
+__italic__: Set the font italic property:
+
+@code
+    lxw_chart_font font = {.italic = LXW_TRUE};
+@endcode
+
+__underline__: Set the font underline property:
+
+@code
+    lxw_chart_font font = {.underline = LXW_TRUE};
+@endcode
+
+__rotation__: Set the font rotation, angle, property in the range -90 to 90
+deg:
+
+@code
+    lxw_chart_font font = {.rotation = 45};
+@endcode
+
+This is useful for displaying axis data such as dates in a more compact
+format.
+
+__color__: Set the font color property. Can be a color index, a color name or
+HTML style RGB color, See @ref working_with_colors :
+
+@code
+    lxw_chart_font font = {.color = LXW_COLOR_BLUE};
+@endcode
+
+Here is a longer example of several chart formats:
+
+
+@dontinclude chart_fonts.c
+@skip lxw_chart_font
+@until chart_legend_set_font
+
+@image html chart_fonts.png
 
 
 @section ww_charts_limitations Chart Limitations
@@ -30,7 +108,7 @@ both. The documentation calls out the type of axis to which functions apply.
 The following chart features aren't currently supported in libxlsxwriter but
 will be in time:
 
-- Chart formatting.
+- Chart formatting (in progress).
 - Chart markers.
 - Secondary axis.
 - Combined charts.

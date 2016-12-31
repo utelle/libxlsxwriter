@@ -2,7 +2,7 @@
 #
 # Tests for libxlsxwriter.
 #
-# Copyright 2014-2016, John McNamara, jmcnamara@cpan.org
+# Copyright 2014-2017, John McNamara, jmcnamara@cpan.org
 #
 
 import base_test_class
@@ -14,6 +14,8 @@ class TestCompareXLSXFiles(base_test_class.XLSXBaseTest):
     Test file created with libxlsxwriter against a file created by Excel.
 
     """
+
+    # Tests for cases that don't deserve a full test_*.py of their own.
 
     def test_tab_color01(self):
         self.run_exe_test('test_tab_color01')
@@ -32,3 +34,6 @@ class TestCompareXLSXFiles(base_test_class.XLSXBaseTest):
 
     def test_gh42_02(self):
         self.run_exe_test('test_gh42_02')
+
+    def test_chart_legend01(self):
+        self.run_exe_test('test_chart_legend01')
