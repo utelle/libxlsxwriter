@@ -9,7 +9,8 @@ Libxlsxwriter: A C library for creating Excel XLSX files.
 
 ## The libxlsxwriter library
 
-Libxlsxwriter is a C library that can be used to write text, numbers, formulas and hyperlinks to multiple worksheets in an Excel 2007+ XLSX file.
+Libxlsxwriter is a C library that can be used to write text, numbers, formulas
+and hyperlinks to multiple worksheets in an Excel 2007+ XLSX file.
 
 It supports features such as:
 
@@ -24,7 +25,7 @@ It supports features such as:
 - Source code available on [GitHub](https://github.com/jmcnamara/libxlsxwriter).
 - FreeBSD license.
 - ANSI C.
-- Works with GCC 4.x, GCC 5.x, Clang, Xcode, MSVC 2015, ICC, TCC, MinGW, MingGW-w64/32.
+- Works with GCC, Clang, Xcode, MSVC 2015, ICC, TCC, MinGW, MingGW-w64/32.
 - Works on Linux, FreeBSD, OpenBSD, OS X, iOS and Windows. Also works on MSYS/MSYS2 and Cygwin.
 - Compiles for 32 and 64 bit.
 - The only dependency is on `zlib`.
@@ -72,4 +73,6 @@ int main() {
 
 
 
-See the [full documentation](http://libxlsxwriter.github.io) for the getting started guide, a tutorial, the main API documentation and examples.
+See the [full documentation](http://libxlsxwriter.github.io) for the getting
+started guide, a tutorial, the main API documentation and examples.
+

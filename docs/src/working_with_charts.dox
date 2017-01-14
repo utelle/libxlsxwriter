@@ -6,6 +6,15 @@
 This section explains how to work with some of the options and features of
 @ref chart.h "The Chart object".
 
+The majority of the examples in this section are based on a variation of the following program:
+
+@dontinclude chart_working_with_example.c
+@skip main
+@until }
+
+@image html chart_working.png
+
+
 
 @section ww_charts_axes Chart Value and Category Axes
 
@@ -13,19 +22,161 @@ When working with charts it is important to understand how Excel
 differentiates between a chart axis that is used for series categories and a
 chart axis that is used for series values.
 
-In the example above the X axis is the **category** axis and each of the values
-is evenly spaced and sequential. The Y axis is the **value** axis and points
-are displayed according to their value.
+In the majority of Excel charts the X axis is the **category** axis and each
+of the values is evenly spaced and sequential. The Y axis is the **value**
+axis and points are displayed according to their value:
+
+@image html chart_axes01.png
 
 Excel treats these two types of axis differently and exposes different
-properties for each.
+properties for each. For example, here are the properties for a category axis:
 
-As such some of the `libxlsxwriter` axis properties can be set for a value
+@image html chart_axes02.png
+
+Here are properties for a value axis:
+
+@image html chart_axes03.png
+
+As such, some of the `libxlsxwriter` axis properties can be set for a value
 axis, some can be set for a category axis and some properties can be set for
-both. The documentation calls out the type of axis to which functions apply.
+both. The documentation calls out the type of axis to which functions apply
+and the API emits a warning if the wrong type is used.
+
+Some category axes, such as the one in the column chart example above, use
+numbers as the categories. However, these numbers can't be treated like value
+axes. In particular you can't use chart_axis_set_max() and
+chart_axis_set_min() for category axes, as you can see in the respective
+format dialogs above.
+
+For a Bar chart the Category and Value axes are reversed:
+
+@image html chart_axes04.png
+
+A Scatter chart (but not a Line chart) has 2 value axes:
+
+@image html chart_axes05.png
+
+@note Date axes aren't supported yet.
 
 
-@section chart_fonts Working with Chart Fonts
+@section chart_markers Working with Chart markers
+
+In Excel a chart marker is used to distinguish data points in a plotted
+series. In general only Line and Scatter and Radar chart types use
+markers. The libxlsxwriter chart types that can have markers are:
+
+- #LXW_CHART_LINE
+- #LXW_CHART_SCATTER
+- #LXW_CHART_SCATTER_STRAIGHT
+- #LXW_CHART_SCATTER_STRAIGHT_WITH_MARKERS
+- #LXW_CHART_SCATTER_SMOOTH
+- #LXW_CHART_SCATTER_SMOOTH_WITH_MARKERS
+- #LXW_CHART_RADAR
+- #LXW_CHART_RADAR_WITH_MARKERS
+
+The chart types with `MARKERS` in the name have markers with default colors
+and shapes turned on by default but it is possible to change them using the
+functions shown below.
+
+The `chart_series_set_marker_type()` function is used to specify the type of
+the series marker:
+
+@code
+    chart_series_set_marker_type(series, LXW_CHART_MARKER_DIAMOND);
+@endcode
+
+@image html chart_marker1.png
+
+The available marker types defined by #lxw_chart_marker_type are:
+
+- #LXW_CHART_MARKER_AUTOMATIC
+- #LXW_CHART_MARKER_NONE
+- #LXW_CHART_MARKER_SQUARE
+- #LXW_CHART_MARKER_DIAMOND
+- #LXW_CHART_MARKER_TRIANGLE
+- #LXW_CHART_MARKER_X
+- #LXW_CHART_MARKER_STAR
+- #LXW_CHART_MARKER_SHORT_DASH
+- #LXW_CHART_MARKER_LONG_DASH
+- #LXW_CHART_MARKER_CIRCLE
+- #LXW_CHART_MARKER_PLUS
+
+The `#LXW_CHART_MARKER_NONE` type can be used to turn off default markers:
+
+@code
+    chart_series_set_marker_type(series, LXW_CHART_MARKER_NONE);
+@endcode
+
+@image html chart_series_set_marker_none.png
+
+The `#LXW_CHART_MARKER_AUTOMATIC` type is a special case which turns on a
+marker using the default marker style for the particular series. If
+automatic is on then other marker properties such as size, line or fill
+cannot be set.
+
+The `chart_series_set_marker_size()` function is used to specify the size of
+the series marker:
+
+@code
+    chart_series_set_marker_type(series, LXW_CHART_MARKER_CIRCLE);
+    chart_series_set_marker_size(series, 10);
+@endcode
+
+@image html chart_series_set_marker_size.png
+
+
+The `chart_series_set_marker_line()` and `chart_series_set_marker_fill()`
+functions can be used to set the line/border and fill properties of a chart
+marker:
+
+@code
+    lxw_chart_line line = {.color = LXW_COLOR_BLACK};
+    lxw_chart_fill fill = {.color = LXW_COLOR_RED};
+
+    chart_series_set_marker_type(series, LXW_CHART_MARKER_SQUARE);
+    chart_series_set_marker_size(series, 8);
+
+    chart_series_set_marker_line(series, &line);
+    chart_series_set_marker_fill(series, &fill);
+@endcode
+
+@image html chart_marker2.png
+
+For more information on line/border and fill formatting see @ref chart_lines
+and @ref chart_fills below.
+
+
+@section chart_formatting Chart Formatting
+
+The following chart formatting properties can be set for any chart object that
+they apply to (and that are supported by libxlsxwriter) such as chart lines,
+column fill areas and other chart elements:
+
+- Font
+- Line/Border
+- Fill
+- Pattern
+
+For example:
+
+@code
+    lxw_chart_line chart_line  = {.color = LXW_COLOR_BLUE};
+    lxw_chart_line marker_line = {.color = LXW_COLOR_RED};
+    lxw_chart_fill marker_fill = {.color = LXW_COLOR_YELLOW};
+
+    chart_series_set_marker_type(series, LXW_CHART_MARKER_SQUARE);
+    chart_series_set_marker_size(series, 5);
+
+    chart_series_set_line(series, &chart_line);
+    chart_series_set_marker_line(series, &marker_line);
+    chart_series_set_marker_fill(series, &marker_fill);
+@endcode
+
+@image html chart_formatting2.png
+
+These properties are explained in the subsections below.
+
+@subsection chart_fonts Chart formatting: Fonts
 
 Font properties can be set for several chart objects such as chart titles,
 axis labels, and axis numbering.
@@ -45,55 +196,55 @@ A chart font #lxw_chart_font struct with default properties is:
 
 The font properties are:
 
-__name__: Set the font name:
+- `name`: Set the font name:
 
 @code
     lxw_chart_font font = {.name = "Arial"};
 @endcode
 
-
-__size__: Set the font size:
+- `size`: Set the font size:
 
 @code
     lxw_chart_font font = {.name = "Arial", .size = 11};
 @endcode
 
-__bold__: Set the font bold property:
+- `bold`: Set the font bold property:
 
 @code
     lxw_chart_font font = {.bold = LXW_TRUE};
 @endcode
 
-__italic__: Set the font italic property:
+- `italic`: Set the font italic property:
 
 @code
     lxw_chart_font font = {.italic = LXW_TRUE};
 @endcode
 
-__underline__: Set the font underline property:
+- `underline`: Set the font underline property:
 
 @code
     lxw_chart_font font = {.underline = LXW_TRUE};
 @endcode
 
-__rotation__: Set the font rotation, angle, property in the range -90 to 90
+- `rotation`: Set the font rotation, angle, property in the range -90 to 90
 deg:
 
 @code
     lxw_chart_font font = {.rotation = 45};
 @endcode
 
-This is useful for displaying axis data such as dates in a more compact
-format.
+  This is useful for displaying axis data such as dates in a more compact
+  format.
 
-__color__: Set the font color property. Can be a color index, a color name or
-HTML style RGB color, See @ref working_with_colors :
+- `color`: Set the font color property. It can be a HTML style RGB color or a
+  limited number of named colors (see @ref working_with_colors for more
+  information):
 
 @code
     lxw_chart_font font = {.color = LXW_COLOR_BLUE};
 @endcode
 
-Here is a longer example of several chart formats:
+Here is a longer example with several chart formats:
 
 
 @dontinclude chart_fonts.c
@@ -103,16 +254,277 @@ Here is a longer example of several chart formats:
 @image html chart_fonts.png
 
 
+@subsection chart_lines Chart formatting: Line
+
+The line format is used to specify properties of line objects that appear in a
+chart such as a plotted line on a chart or a border.
+
+A chart line #lxw_chart_line struct with default properties is:
+
+@code
+    lxw_chart_line line = {.none      = LXW_FALSE,
+                           .color     = LXW_COLOR_BLACK,
+                           .width     = 2.25,
+                           .dash_type = LXW_CHART_LINE_DASH_SOLID};
+@endcode
+
+The `none` member is uses to turn the line off (it is always on by default
+except in Scatter charts). This is useful if you wish to plot a series with
+markers without a line, or a column fill without a border:
+
+@code
+    lxw_chart_line line = {.none = LXW_TRUE};
+
+    chart_series_set_line(series, &line);
+    chart_series_set_marker_type(series, LXW_CHART_MARKER_AUTOMATIC);
+@endcode
+
+@image html chart_formatting3.png
+
+The `color` member sets the color of the line. It can be a HTML style RGB
+color or a limited number of named colors (see @ref working_with_colors for
+more information):
+
+@code
+    lxw_chart_line line = {.color = 0xFF9900};
+
+    chart_series_set_line(series, &line);
+@endcode
+
+@image html chart_formatting4.png
+
+
+The `width` member sets the width of the line. It should be specified in
+increments of 0.25 of a point as in Excel:
+
+@code
+    lxw_chart_line line = {.width = 4.25};
+
+    chart_series_set_line(series, &line);
+@endcode
+
+@image html chart_formatting_width.png
+
+
+The `dash_type` member sets the dash style of the line:
+
+@code
+    lxw_chart_line line = {.dash_type = LXW_CHART_LINE_DASH_DASH_DOT};
+
+    chart_series_set_line(series, &line);
+@endcode
+
+@image html chart_formatting5.png
+
+The following #lxw_chart_line_dash_type values are available. They are shown
+in the order that they appear in the Excel dialog:
+
+ Define                                | Excel name
+ ------------------------------------- | ------------------
+ LXW_CHART_LINE_DASH_SOLID             | Solid
+ LXW_CHART_LINE_DASH_ROUND_DOT         | Round Dot
+ LXW_CHART_LINE_DASH_SQUARE_DOT        | Square Dot
+ LXW_CHART_LINE_DASH_DASH              | Dash
+ LXW_CHART_LINE_DASH_DASH_DOT          | Dash Dot
+ LXW_CHART_LINE_DASH_LONG_DASH         | Long Dash
+ LXW_CHART_LINE_DASH_LONG_DASH_DOT     | Long Dash Dot
+ LXW_CHART_LINE_DASH_LONG_DASH_DOT_DOT | Long Dash Dot Dot
+
+The default line style is `#LXW_CHART_LINE_DASH_SOLID`.
+
+More than one line property can be specified at a time:
+
+@code
+    lxw_chart_line line = {.color     = LXW_COLOR_RED,
+                           .width     = 1.25,
+                           .dash_type = LXW_CHART_LINE_DASH_SQUARE_DOT};
+@endcode
+
+@image html chart_formatting_multiple.png
+
+
+@subsection chart_borders Chart formatting: Border
+
+In Excel chart formatting the `border` property is a synonym for `line` when
+the object being formatting also has a `fill` property.
+
+Anywhere you see `border` in an Excel chart dialog you can use the equivalent
+libxlsxwriter `line` function.
+
+
+@subsection chart_fills Chart formatting: Fill
+
+The fill format is used to specify properties of chart objects that internal
+boundaries such as a column chart.
+
+
+A chart fill #lxw_chart_fill struct with default properties is:
+
+@code
+    lxw_chart_fill fill = {.none         = LXW_FALSE,
+                           .color        = LXW_COLOR_BLACK,
+                           .transparency = 0};
+@endcode
+
+
+The none property is used to turn the fill property off (it is generally on by
+default):
+
+@code
+    lxw_chart_line line = {.color = LXW_COLOR_BLACK};
+    lxw_chart_fill fill = {.none  = LXW_TRUE};
+
+    chart_series_set_line(series, &line);
+    chart_series_set_fill(series, &fill);
+@endcode
+
+@image html chart_fill1.png
+
+The `color` member sets the color of the fill area. It can be a HTML style RGB
+color or a limited number of named colors (see @ref working_with_colors for
+more information):
+
+@code
+    lxw_chart_fill fill = {.color = 0xFF9900};
+
+    chart_series_set_fill(series, &fill);
+@endcode
+
+@image html chart_fill2.png
+
+The `transparency` member sets the transparency of the solid fill color in the
+integer range 1 - 100:
+
+@code
+    lxw_chart_fill fill = {.color        = LXW_COLOR_YELLOW,
+                           .transparency = 50};
+
+    chart_series_set_fill(series, &fill);
+@endcode
+
+@image html chart_fill3.png
+
+The `fill` format is generally used in conjunction with a border which can be
+set via the `line` format:
+
+@code
+    lxw_chart_line line = {.color = LXW_COLOR_BLACK};
+    lxw_chart_fill fill = {.color = LXW_COLOR_RED};
+
+    chart_series_set_line(series, &line);
+    chart_series_set_fill(series, &fill);
+@endcode
+
+@image html chart_fill4.png
+
+
+@subsection chart_patterns Chart formatting: Pattern
+
+The pattern fill is used to specify pattern filled areas of chart objects such
+as the interior of a column or the background of the chart itself.
+
+A chart pattern #lxw_chart_pattern struct with default properties is:
+
+@code
+    lxw_chart_pattern pattern = {.type      = LXW_CHART_PATTERN_NONE,
+                                 .fg_color  = LXW_COLOR_NONE,;
+                                 .bg_color  = LXW_COLOR_WHITE};
+@endcode
+
+Where the members are:
+
+- `pattern`: The pattern to be applied (required).
+- `fg_color`: The foreground color of the pattern (required).
+- `bg_color`: The background color (optional, defaults to white).
+
+
+The foreground color, `fg_color`, is a required parameter and can be HTML
+style RGB color or a limited number of named colors (see
+@ref working_with_colors for more information):
+
+The background color, `bg_color`, is optional and defaults to LXW_COLOR_WHITE.
+
+For example:
+
+@code
+    lxw_chart_pattern pattern1 = {.type = LXW_CHART_PATTERN_SHINGLE,
+                                  .fg_color = 0x804000,
+                                  .bg_color = 0XC68C53};
+
+    lxw_chart_pattern pattern2 = {.type = LXW_CHART_PATTERN_HORIZONTAL_BRICK,
+                                  .fg_color = 0XB30000,
+                                  .bg_color = 0XFF6666};
+
+    chart_series_set_pattern(series1, &pattern1);
+    chart_series_set_pattern(series2, &pattern2);
+
+@endcode
+
+@image html chart_pattern.png
+
+The following patterns #lxw_chart_pattern_type can be applied:
+
+- #LXW_CHART_PATTERN_PERCENT_5
+- #LXW_CHART_PATTERN_PERCENT_10
+- #LXW_CHART_PATTERN_PERCENT_20
+- #LXW_CHART_PATTERN_PERCENT_25
+- #LXW_CHART_PATTERN_PERCENT_30
+- #LXW_CHART_PATTERN_PERCENT_40
+- #LXW_CHART_PATTERN_PERCENT_50
+- #LXW_CHART_PATTERN_PERCENT_60
+- #LXW_CHART_PATTERN_PERCENT_70
+- #LXW_CHART_PATTERN_PERCENT_75
+- #LXW_CHART_PATTERN_PERCENT_80
+- #LXW_CHART_PATTERN_PERCENT_90
+- #LXW_CHART_PATTERN_LIGHT_DOWNWARD_DIAGONAL
+- #LXW_CHART_PATTERN_LIGHT_UPWARD_DIAGONAL
+- #LXW_CHART_PATTERN_DARK_DOWNWARD_DIAGONAL
+- #LXW_CHART_PATTERN_DARK_UPWARD_DIAGONAL
+- #LXW_CHART_PATTERN_WIDE_DOWNWARD_DIAGONAL
+- #LXW_CHART_PATTERN_WIDE_UPWARD_DIAGONAL
+- #LXW_CHART_PATTERN_LIGHT_VERTICAL
+- #LXW_CHART_PATTERN_LIGHT_HORIZONTAL
+- #LXW_CHART_PATTERN_NARROW_VERTICAL
+- #LXW_CHART_PATTERN_NARROW_HORIZONTAL
+- #LXW_CHART_PATTERN_DARK_VERTICAL
+- #LXW_CHART_PATTERN_DARK_HORIZONTAL
+- #LXW_CHART_PATTERN_DASHED_DOWNWARD_DIAGONAL
+- #LXW_CHART_PATTERN_DASHED_UPWARD_DIAGONAL
+- #LXW_CHART_PATTERN_DASHED_HORIZONTAL
+- #LXW_CHART_PATTERN_DASHED_VERTICAL
+- #LXW_CHART_PATTERN_SMALL_CONFETTI
+- #LXW_CHART_PATTERN_LARGE_CONFETTI
+- #LXW_CHART_PATTERN_ZIGZAG
+- #LXW_CHART_PATTERN_WAVE
+- #LXW_CHART_PATTERN_DIAGONAL_BRICK
+- #LXW_CHART_PATTERN_HORIZONTAL_BRICK
+- #LXW_CHART_PATTERN_WEAVE
+- #LXW_CHART_PATTERN_PLAID
+- #LXW_CHART_PATTERN_DIVOT
+- #LXW_CHART_PATTERN_DOTTED_GRID
+- #LXW_CHART_PATTERN_DOTTED_DIAMOND
+- #LXW_CHART_PATTERN_SHINGLE
+- #LXW_CHART_PATTERN_TRELLIS
+- #LXW_CHART_PATTERN_SPHERE
+- #LXW_CHART_PATTERN_SMALL_GRID
+- #LXW_CHART_PATTERN_LARGE_GRID
+- #LXW_CHART_PATTERN_SMALL_CHECK
+- #LXW_CHART_PATTERN_LARGE_CHECK
+- #LXW_CHART_PATTERN_OUTLINED_DIAMOND
+- #LXW_CHART_PATTERN_SOLID_DIAMOND
+
+@note If a pattern fill is used on a chart object it overrides the solid fill
+      properties of the object.
+
 @section ww_charts_limitations Chart Limitations
 
 The following chart features aren't currently supported in libxlsxwriter but
-will be in time:
+will be in time. See the [GitHub Chart Feature Request][1].
 
-- Chart formatting (in progress).
-- Chart markers.
+[1]: https://github.com/jmcnamara/libxlsxwriter/issues/51
+
 - Secondary axis.
 - Combined charts.
-- Chart legend formatting.
 - Chart area and plot area formatting.
 - Chart tables.
 - Up down lines.

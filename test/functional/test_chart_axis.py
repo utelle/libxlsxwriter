@@ -31,6 +31,43 @@ class TestCompareXLSXFiles(base_test_class.XLSXBaseTest):
     def test_chart_axis07(self):
         self.run_exe_test('test_chart_axis07')
 
+    def test_chart_axis08(self):
+        self.run_exe_test('test_chart_axis08')
+
+    def test_chart_axis09(self):
+        self.run_exe_test('test_chart_axis09')
+
+    def test_chart_axis10(self):
+        self.run_exe_test('test_chart_axis10')
+
+    def test_chart_axis11(self):
+        self.run_exe_test('test_chart_axis11')
+
+    def test_chart_axis12(self):
+        self.run_exe_test('test_chart_axis12')
+
+    def test_chart_axis13(self):
+        self.run_exe_test('test_chart_axis13')
+
+    # Stock chart not supported.
+    # def test_chart_axis14(self):
+    #     self.run_exe_test('test_chart_axis14')
+
+    def test_chart_axis15(self):
+        self.run_exe_test('test_chart_axis15')
+
+    def test_chart_axis17(self):
+        self.run_exe_test('test_chart_axis17')
+
+    def test_chart_axis19(self):
+        self.run_exe_test('test_chart_axis19')
+
+    def test_chart_axis20(self):
+        self.run_exe_test('test_chart_axis20')
+
+    def test_chart_axis21(self):
+        self.run_exe_test('test_chart_axis21')
+
 
 
     def test_chart_axis26(self):
@@ -45,6 +82,38 @@ class TestCompareXLSXFiles(base_test_class.XLSXBaseTest):
     def test_chart_axis29(self):
         self.run_exe_test('test_chart_axis29')
 
+    def test_chart_axis30(self):
+        self.run_exe_test('test_chart_axis30')
+
+    def test_chart_axis31(self):
+        self.run_exe_test('test_chart_axis31')
+
+    def test_chart_axis32(self):
+        self.run_exe_test('test_chart_axis32')
 
     def test_chart_axis33(self):
         self.run_exe_test('test_chart_axis33')
+
+    def test_chart_axis34(self):
+        self.run_exe_test('test_chart_axis34')
+
+    def test_chart_axis35(self):
+        self.run_exe_test('test_chart_axis35')
+
+    def test_chart_axis36(self):
+        self.run_exe_test('test_chart_axis36')
+
+    def test_chart_axis37(self):
+        self.run_exe_test('test_chart_axis37')
+
+    def test_chart_axis38(self):
+        self.run_exe_test('test_chart_axis38')
+
+    def test_chart_axis39(self):
+        self.run_exe_test('test_chart_axis39')
+
+    def test_chart_axis40(self):
+        self.run_exe_test('test_chart_axis40')
+
+    def test_chart_axis41(self):
+        self.run_exe_test('test_chart_axis41')

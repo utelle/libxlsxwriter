@@ -2,6 +2,110 @@
 @page changes Changes
 
 
+## 0.5.9 January 14 2017
+
+- Added support for chart axis crossing. See `chart_axis_set_crossing()` and
+  `chart_axis_set_crossing_max()`.
+
+
+## 0.5.8 January 13 2017
+
+- Added `chart_axis_set_major_tick_mark()` and
+  `chart_axis_set_minor_tick_mark()` functions to chart axis tick marks.
+
+
+## 0.5.7 January 12 2017
+
+- Added `chart_axis_set_display_units()` function to set chart axis display
+  units.
+
+
+## 0.5.6 January 11 2017
+
+- Added `chart_axis_set_interval_unit()` and `chart_axis_set_interval_tick()`
+  functions to adjust category axis intervals.
+
+
+## 0.5.5 January 10 2017
+
+- Added `chart_axis_set_major_unit()` and `chart_axis_set_minor_unit()` to set
+  the major and minor units of a category axis.
+
+
+## 0.5.4 January 9 2017
+
+- Added `chart_axis_set_label_position()` option to position the axis labels
+  (numbers).
+
+- Improved documentation for @ref ww_charts_axes.
+
+
+## 0.5.3 January 8 2017
+
+- Added `chart_axis_set_position()` option to position a category axis
+  horizontally on, or between, the axis tick marks.
+
+
+## 0.5.2 January 7 2017
+
+- Added option to turn off chart axis: `chart_axis_off()`.
+
+
+## 0.5.1 January 6 2017
+
+- Added chart major and minor gridlines handling, see:
+
+  - `chart_axis_major_gridlines_set_visible()`
+  - `chart_axis_minor_gridlines_set_visible()`
+  - `chart_axis_major_gridlines_set_line()`
+  - `chart_axis_minor_gridlines_set_line()`
+
+
+## 0.5.0 January 5 2017
+
+- Added chart and plot area formatting. See `chart_chartarea_set_line()` and
+  `chart_plotarea_set_line()`.
+
+
+## 0.4.9 January 4 2017
+
+- Added support for chart patterns. See @ref chart_patterns.
+
+
+## 0.4.8 January 3 2017
+
+- Added support for chart markers. See @ref chart_markers.
+
+
+## 0.4.7 January 2 2017
+
+- Added `chart_axis_set_reverse()` function to reverse the order of a chart
+  axis.
+
+- Added `chart_axis_set_min()`and `chart_axis_set_max()` functions to set the
+  minimum and maximum value for a chart axis.
+
+- Added `chart_axis_set_log_base()` function to set the log base of a chart
+  axis.
+  Feature request [#70][gh_70].
+
+  [gh_70]: https://github.com/jmcnamara/libxlsxwriter/issues/70
+
+
+## 0.4.6 January 1 2017
+
+- Added functions to set chart line and fill properties, see:
+
+  - `chart_series_set_line()`. Feature request [#83][gh_83].
+  - `chart_series_set_fill()`.
+  - `chart_axis_set_line()`.
+  - `chart_axis_set_fill()`.
+  - @ref chart_lines.
+  - @ref chart_fills.
+
+  [gh_83]: https://github.com/jmcnamara/libxlsxwriter/issues/83
+
+
 ## 0.4.5 December 31 2016
 
 - Added functions to set chart legend properties: see  `chart_legend_set_position()`,

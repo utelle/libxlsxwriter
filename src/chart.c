@@ -15,6 +15,8 @@
  * Forward declarations.
  */
 
+STATIC void _chart_initialize(lxw_chart *self, uint8_t type);
+
 /*****************************************************************************
  *
  * Private functions.
@@ -32,15 +34,17 @@ _chart_free_range(lxw_series_range *range)
     if (!range)
         return;
 
-    while (!STAILQ_EMPTY(range->data_cache)) {
-        data_point = STAILQ_FIRST(range->data_cache);
-        free(data_point->string);
-        STAILQ_REMOVE_HEAD(range->data_cache, list_pointers);
+    if (range->data_cache) {
+        while (!STAILQ_EMPTY(range->data_cache)) {
+            data_point = STAILQ_FIRST(range->data_cache);
+            free(data_point->string);
+            STAILQ_REMOVE_HEAD(range->data_cache, list_pointers);
 
-        free(data_point);
+            free(data_point);
+        }
+        free(range->data_cache);
     }
 
-    free(range->data_cache);
     free(range->formula);
     free(range->sheetname);
     free(range);
@@ -56,6 +60,16 @@ _chart_series_free(lxw_chart_series *series)
         return;
 
     free(series->title.name);
+    free(series->line);
+    free(series->fill);
+    free(series->pattern);
+
+    if (series->marker) {
+        free(series->marker->line);
+        free(series->marker->fill);
+        free(series->marker->pattern);
+        free(series->marker);
+    }
 
     _chart_free_range(series->categories);
     _chart_free_range(series->values);
@@ -67,15 +81,15 @@ _chart_series_free(lxw_chart_series *series)
 /*
  * Initialize the data cache in a range object.
  */
-STATIC int
+STATIC lxw_error
 _chart_init_data_cache(lxw_series_range *range)
 {
     /* Initialize the series range data cache. */
     range->data_cache = calloc(1, sizeof(struct lxw_series_data_points));
-    RETURN_ON_MEM_ERROR(range->data_cache, -1);
+    RETURN_ON_MEM_ERROR(range->data_cache, LXW_ERROR_MEMORY_MALLOC_FAILED);
     STAILQ_INIT(range->data_cache);
 
-    return 0;
+    return LXW_NO_ERROR;
 }
 
 /*
@@ -120,6 +134,11 @@ lxw_chart_free(lxw_chart *chart)
         _chart_free_font(chart->x_axis->num_font);
         _chart_free_range(chart->x_axis->title.range);
         free(chart->x_axis->title.name);
+        free(chart->x_axis->line);
+        free(chart->x_axis->fill);
+        free(chart->x_axis->pattern);
+        free(chart->x_axis->major_gridlines.line);
+        free(chart->x_axis->minor_gridlines.line);
         free(chart->x_axis);
     }
 
@@ -129,6 +148,11 @@ lxw_chart_free(lxw_chart *chart)
         _chart_free_font(chart->y_axis->num_font);
         _chart_free_range(chart->y_axis->title.range);
         free(chart->y_axis->title.name);
+        free(chart->y_axis->line);
+        free(chart->y_axis->fill);
+        free(chart->y_axis->pattern);
+        free(chart->y_axis->major_gridlines.line);
+        free(chart->y_axis->minor_gridlines.line);
         free(chart->y_axis);
     }
 
@@ -140,6 +164,15 @@ lxw_chart_free(lxw_chart *chart)
     /* Chart legend. */
     _chart_free_font(chart->legend.font);
     free(chart->delete_series);
+
+    free(chart->default_marker);
+
+    free(chart->chartarea_line);
+    free(chart->chartarea_fill);
+    free(chart->chartarea_pattern);
+    free(chart->plotarea_line);
+    free(chart->plotarea_fill);
+    free(chart->plotarea_pattern);
 
     free(chart);
 }
@@ -187,14 +220,14 @@ lxw_chart_new(uint8_t type)
     chart->hole_size = 50;
 
     /* Set the default axis positions. */
-    chart->cat_axis_position = LXW_CHART_AXIS_BOTTOM;
-    chart->val_axis_position = LXW_CHART_AXIS_LEFT;
+    chart->x_axis->axis_position = LXW_CHART_AXIS_BOTTOM;
+    chart->y_axis->axis_position = LXW_CHART_AXIS_LEFT;
 
     lxw_strcpy(chart->x_axis->default_num_format, "General");
     lxw_strcpy(chart->y_axis->default_num_format, "General");
 
-    chart->x_axis->default_major_gridlines = LXW_FALSE;
-    chart->y_axis->default_major_gridlines = LXW_TRUE;
+    chart->x_axis->major_gridlines.visible = LXW_FALSE;
+    chart->y_axis->major_gridlines.visible = LXW_TRUE;
 
     chart->series_overlap_1 = 100;
 
@@ -202,6 +235,9 @@ lxw_chart_new(uint8_t type)
     chart->has_horiz_val_axis = LXW_TRUE;
 
     chart->legend.position = LXW_CHART_LEGEND_RIGHT;
+
+    /* Initialize the chart specific properties. */
+    _chart_initialize(chart, chart->type);
 
     return chart;
 
@@ -236,10 +272,125 @@ _chart_convert_font_args(lxw_chart_font *user_font)
     if (font->rotation)
         font->rotation = font->rotation * 60000;
 
-    if (font->color)
+    if (font->color) {
+        font->color = lxw_format_check_color(font->color);
         font->has_color = LXW_TRUE;
+    }
 
     return font;
+}
+
+/*
+ * Create a copy of a user supplied line.
+ */
+STATIC lxw_chart_line *
+_chart_convert_line_args(lxw_chart_line *user_line)
+{
+    lxw_chart_line *line;
+
+    if (!user_line)
+        return NULL;
+
+    line = calloc(1, sizeof(struct lxw_chart_line));
+    RETURN_ON_MEM_ERROR(line, NULL);
+
+    memcpy(line, user_line, sizeof(lxw_chart_line));
+
+    if (line->color) {
+        line->color = lxw_format_check_color(line->color);
+        line->has_color = LXW_TRUE;
+    }
+
+    if (line->transparency > 100)
+        line->transparency = 0;
+
+    return line;
+}
+
+/*
+ * Create a copy of a user supplied fill.
+ */
+STATIC lxw_chart_fill *
+_chart_convert_fill_args(lxw_chart_fill *user_fill)
+{
+    lxw_chart_fill *fill;
+
+    if (!user_fill)
+        return NULL;
+
+    fill = calloc(1, sizeof(struct lxw_chart_fill));
+    RETURN_ON_MEM_ERROR(fill, NULL);
+
+    memcpy(fill, user_fill, sizeof(lxw_chart_fill));
+
+    if (fill->color) {
+        fill->color = lxw_format_check_color(fill->color);
+        fill->has_color = LXW_TRUE;
+    }
+
+    if (fill->transparency > 100)
+        fill->transparency = 0;
+
+    return fill;
+}
+
+/*
+ * Create a copy of a user supplied pattern.
+ */
+STATIC lxw_chart_pattern *
+_chart_convert_pattern_args(lxw_chart_pattern *user_pattern)
+{
+    lxw_chart_pattern *pattern;
+
+    if (!user_pattern)
+        return NULL;
+
+    if (!user_pattern->type) {
+        LXW_WARN("chart_xxx_set_pattern: 'type' must be specified");
+        return NULL;
+    }
+
+    if (!user_pattern->fg_color) {
+        LXW_WARN("chart_xxx_set_pattern: 'fg_color' must be specified");
+        return NULL;
+    }
+
+    pattern = calloc(1, sizeof(struct lxw_chart_pattern));
+    RETURN_ON_MEM_ERROR(pattern, NULL);
+
+    memcpy(pattern, user_pattern, sizeof(lxw_chart_pattern));
+
+    pattern->fg_color = lxw_format_check_color(pattern->fg_color);
+    pattern->has_fg_color = LXW_TRUE;
+
+    if (pattern->bg_color) {
+        pattern->bg_color = lxw_format_check_color(pattern->bg_color);
+        pattern->has_bg_color = LXW_TRUE;
+    }
+    else {
+        /* Default background color in Excel is white, when unspecified. */
+        pattern->bg_color = LXW_COLOR_WHITE;
+        pattern->has_bg_color = LXW_TRUE;
+    }
+
+    pattern->type = user_pattern->type;
+
+    return pattern;
+}
+
+/*
+ * Set a marker type for a series.
+ */
+STATIC void
+_chart_set_default_marker_type(lxw_chart *self, uint8_t type)
+{
+    if (!self->default_marker) {
+        lxw_chart_marker *marker = calloc(1, sizeof(struct lxw_chart_marker));
+        RETURN_VOID_ON_MEM_ERROR(marker);
+        self->default_marker = marker;
+    }
+
+    self->default_marker->type = type;
 }
 
 /*
@@ -471,7 +622,7 @@ _chart_write_a_alpha(lxw_chart *self, uint8_t transparency)
 {
     struct xml_attribute_list attributes;
     struct xml_attribute *attribute;
-    uint16_t val;
+    uint32_t val;
 
     LXW_INIT_ATTRIBUTES();
 
@@ -519,15 +670,14 @@ _chart_write_a_srgb_clr(lxw_chart *self, lxw_color_t color,
  * Write the <a:solidFill> element.
  */
 STATIC void
-_chart_write_a_solid_fill(lxw_chart *self, lxw_chart_fill *fill)
+_chart_write_a_solid_fill(lxw_chart *self, lxw_color_t color,
+                          uint8_t transparency)
 {
 
     lxw_xml_start_tag(self->file, "a:solidFill", NULL);
 
-    if (fill->has_color) {
-        /* Write the a:srgbClr element. */
-        _chart_write_a_srgb_clr(self, fill->color, fill->transparency);
-    }
+    /* Write the a:srgbClr element. */
+    _chart_write_a_srgb_clr(self, color, transparency);
 
     lxw_xml_end_tag(self->file, "a:solidFill");
 }
@@ -600,11 +750,7 @@ _chart_write_a_def_rpr(lxw_chart *self, lxw_chart_font *font)
         lxw_xml_start_tag(self->file, "a:defRPr", &attributes);
 
         if (has_color) {
-            lxw_chart_fill fill = { 0, 0, 0 };
-
-            fill.color = font->color;
-            fill.has_color = LXW_TRUE;
-            _chart_write_a_solid_fill(self, &fill);
+            _chart_write_a_solid_fill(self, font->color, LXW_FALSE);
         }
 
         if (has_latin) {
@@ -676,11 +822,7 @@ _chart_write_a_r_pr(lxw_chart *self, lxw_chart_font *font)
         lxw_xml_start_tag(self->file, "a:rPr", &attributes);
 
         if (has_color) {
-            lxw_chart_fill fill = { 0, 0, 0 };
-
-            fill.color = font->color;
-            fill.has_color = LXW_TRUE;
-            _chart_write_a_solid_fill(self, &fill);
+            _chart_write_a_solid_fill(self, font->color, LXW_FALSE);
         }
 
         if (has_latin) {
@@ -1318,6 +1460,43 @@ _chart_write_idx(lxw_chart *self, uint16_t index)
 }
 
 /*
+ * Write the <a:prstDash> element.
+ */
+STATIC void
+_chart_write_a_prst_dash(lxw_chart *self, uint8_t dash_type)
+{
+    struct xml_attribute_list attributes;
+    struct xml_attribute *attribute;
+
+    LXW_INIT_ATTRIBUTES();
+
+    if (dash_type == LXW_CHART_LINE_DASH_ROUND_DOT)
+        LXW_PUSH_ATTRIBUTES_STR("val", "sysDot");
+    else if (dash_type == LXW_CHART_LINE_DASH_SQUARE_DOT)
+        LXW_PUSH_ATTRIBUTES_STR("val", "sysDash");
+    else if (dash_type == LXW_CHART_LINE_DASH_DASH_DOT)
+        LXW_PUSH_ATTRIBUTES_STR("val", "dashDot");
+    else if (dash_type == LXW_CHART_LINE_DASH_LONG_DASH)
+        LXW_PUSH_ATTRIBUTES_STR("val", "lgDash");
+    else if (dash_type == LXW_CHART_LINE_DASH_LONG_DASH_DOT)
+        LXW_PUSH_ATTRIBUTES_STR("val", "lgDashDot");
+    else if (dash_type == LXW_CHART_LINE_DASH_LONG_DASH_DOT_DOT)
+        LXW_PUSH_ATTRIBUTES_STR("val", "lgDashDotDot");
+    else if (dash_type == LXW_CHART_LINE_DASH_DOT)
+        LXW_PUSH_ATTRIBUTES_STR("val", "dot");
+    else if (dash_type == LXW_CHART_LINE_DASH_SYSTEM_DASH_DOT)
+        LXW_PUSH_ATTRIBUTES_STR("val", "sysDashDot");
+    else if (dash_type == LXW_CHART_LINE_DASH_SYSTEM_DASH_DOT_DOT)
+        LXW_PUSH_ATTRIBUTES_STR("val", "sysDashDotDot");
+    else
+        LXW_PUSH_ATTRIBUTES_STR("val", "dash");
+
+    lxw_xml_empty_tag(self->file, "a:prstDash", &attributes);
+
+    LXW_FREE_ATTRIBUTES();
+}
+
+/*
  * Write the <a:noFill> element.
  */
 STATIC void
@@ -1330,21 +1509,194 @@ _chart_write_a_no_fill(lxw_chart *self)
  * Write the <a:ln> element.
  */
 STATIC void
-_chart_write_a_ln(lxw_chart *self)
+_chart_write_a_ln(lxw_chart *self, lxw_chart_line *line)
 {
     struct xml_attribute_list attributes;
     struct xml_attribute *attribute;
-    char w[] = "28575";
+    float width_flt;
+    uint32_t width_int;
 
     LXW_INIT_ATTRIBUTES();
-    LXW_PUSH_ATTRIBUTES_STR("w", w);
+
+    /* Round width to nearest 0.25, like Excel. */
+    width_flt = (float) (uint32_t) ((line->width + 0.125) * 4.0) / 4.0;
+
+    /* Convert to internal units. */
+    width_int = (uint32_t) (0.5 + (12700.0 * width_flt));
+
+    if (width_int)
+        LXW_PUSH_ATTRIBUTES_INT("w", width_int);
 
     lxw_xml_start_tag(self->file, "a:ln", &attributes);
 
-    /* Write the a:noFill element. */
-    _chart_write_a_no_fill(self);
+    /* Write the line fill. */
+    if (line->none) {
+        /* Write the a:noFill element. */
+        _chart_write_a_no_fill(self);
+    }
+    else if (line->has_color) {
+        /* Write the a:solidFill element. */
+        _chart_write_a_solid_fill(self, line->color, line->transparency);
+    }
+
+    /* Write the line/dash type. */
+    if (line->dash_type) {
+        /* Write the a:prstDash element. */
+        _chart_write_a_prst_dash(self, line->dash_type);
+    }
 
     lxw_xml_end_tag(self->file, "a:ln");
+
+    LXW_FREE_ATTRIBUTES();
+}
+
+/*
+ * Write the <a:fgClr> element.
+ */
+STATIC void
+_chart_write_a_fg_clr(lxw_chart *self, lxw_color_t color)
+{
+    lxw_xml_start_tag(self->file, "a:fgClr", NULL);
+
+    _chart_write_a_srgb_clr(self, color, LXW_FALSE);
+
+    lxw_xml_end_tag(self->file, "a:fgClr");
+}
+
+/*
+ * Write the <a:bgClr> element.
+ */
+STATIC void
+_chart_write_a_bg_clr(lxw_chart *self, lxw_color_t color)
+{
+    lxw_xml_start_tag(self->file, "a:bgClr", NULL);
+
+    _chart_write_a_srgb_clr(self, color, LXW_FALSE);
+
+    lxw_xml_end_tag(self->file, "a:bgClr");
+}
+
+/*
+ * Write the <a:pattFill> element.
+ */
+STATIC void
+_chart_write_a_patt_fill(lxw_chart *self, lxw_chart_pattern *pattern)
+{
+    struct xml_attribute_list attributes;
+    struct xml_attribute *attribute;
+
+    LXW_INIT_ATTRIBUTES();
+
+    if (pattern->type == LXW_CHART_PATTERN_NONE)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "none");
+    else if (pattern->type == LXW_CHART_PATTERN_PERCENT_5)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "pct5");
+    else if (pattern->type == LXW_CHART_PATTERN_PERCENT_10)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "pct10");
+    else if (pattern->type == LXW_CHART_PATTERN_PERCENT_20)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "pct20");
+    else if (pattern->type == LXW_CHART_PATTERN_PERCENT_25)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "pct25");
+    else if (pattern->type == LXW_CHART_PATTERN_PERCENT_30)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "pct30");
+    else if (pattern->type == LXW_CHART_PATTERN_PERCENT_40)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "pct40");
+    else if (pattern->type == LXW_CHART_PATTERN_PERCENT_50)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "pct50");
+    else if (pattern->type == LXW_CHART_PATTERN_PERCENT_60)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "pct60");
+    else if (pattern->type == LXW_CHART_PATTERN_PERCENT_70)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "pct70");
+    else if (pattern->type == LXW_CHART_PATTERN_PERCENT_75)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "pct75");
+    else if (pattern->type == LXW_CHART_PATTERN_PERCENT_80)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "pct80");
+    else if (pattern->type == LXW_CHART_PATTERN_PERCENT_90)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "pct90");
+    else if (pattern->type == LXW_CHART_PATTERN_LIGHT_DOWNWARD_DIAGONAL)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "ltDnDiag");
+    else if (pattern->type == LXW_CHART_PATTERN_LIGHT_UPWARD_DIAGONAL)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "ltUpDiag");
+    else if (pattern->type == LXW_CHART_PATTERN_DARK_DOWNWARD_DIAGONAL)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "dkDnDiag");
+    else if (pattern->type == LXW_CHART_PATTERN_DARK_UPWARD_DIAGONAL)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "dkUpDiag");
+    else if (pattern->type == LXW_CHART_PATTERN_WIDE_DOWNWARD_DIAGONAL)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "wdDnDiag");
+    else if (pattern->type == LXW_CHART_PATTERN_WIDE_UPWARD_DIAGONAL)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "wdUpDiag");
+    else if (pattern->type == LXW_CHART_PATTERN_LIGHT_VERTICAL)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "ltVert");
+    else if (pattern->type == LXW_CHART_PATTERN_LIGHT_HORIZONTAL)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "ltHorz");
+    else if (pattern->type == LXW_CHART_PATTERN_NARROW_VERTICAL)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "narVert");
+    else if (pattern->type == LXW_CHART_PATTERN_NARROW_HORIZONTAL)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "narHorz");
+    else if (pattern->type == LXW_CHART_PATTERN_DARK_VERTICAL)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "dkVert");
+    else if (pattern->type == LXW_CHART_PATTERN_DARK_HORIZONTAL)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "dkHorz");
+    else if (pattern->type == LXW_CHART_PATTERN_DASHED_DOWNWARD_DIAGONAL)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "dashDnDiag");
+    else if (pattern->type == LXW_CHART_PATTERN_DASHED_UPWARD_DIAGONAL)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "dashUpDiag");
+    else if (pattern->type == LXW_CHART_PATTERN_DASHED_HORIZONTAL)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "dashHorz");
+    else if (pattern->type == LXW_CHART_PATTERN_DASHED_VERTICAL)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "dashVert");
+    else if (pattern->type == LXW_CHART_PATTERN_SMALL_CONFETTI)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "smConfetti");
+    else if (pattern->type == LXW_CHART_PATTERN_LARGE_CONFETTI)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "lgConfetti");
+    else if (pattern->type == LXW_CHART_PATTERN_ZIGZAG)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "zigZag");
+    else if (pattern->type == LXW_CHART_PATTERN_WAVE)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "wave");
+    else if (pattern->type == LXW_CHART_PATTERN_DIAGONAL_BRICK)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "diagBrick");
+    else if (pattern->type == LXW_CHART_PATTERN_HORIZONTAL_BRICK)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "horzBrick");
+    else if (pattern->type == LXW_CHART_PATTERN_WEAVE)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "weave");
+    else if (pattern->type == LXW_CHART_PATTERN_PLAID)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "plaid");
+    else if (pattern->type == LXW_CHART_PATTERN_DIVOT)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "divot");
+    else if (pattern->type == LXW_CHART_PATTERN_DOTTED_GRID)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "dotGrid");
+    else if (pattern->type == LXW_CHART_PATTERN_DOTTED_DIAMOND)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "dotDmnd");
+    else if (pattern->type == LXW_CHART_PATTERN_SHINGLE)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "shingle");
+    else if (pattern->type == LXW_CHART_PATTERN_TRELLIS)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "trellis");
+    else if (pattern->type == LXW_CHART_PATTERN_SPHERE)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "sphere");
+    else if (pattern->type == LXW_CHART_PATTERN_SMALL_GRID)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "smGrid");
+    else if (pattern->type == LXW_CHART_PATTERN_LARGE_GRID)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "lgGrid");
+    else if (pattern->type == LXW_CHART_PATTERN_SMALL_CHECK)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "smCheck");
+    else if (pattern->type == LXW_CHART_PATTERN_LARGE_CHECK)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "lgCheck");
+    else if (pattern->type == LXW_CHART_PATTERN_OUTLINED_DIAMOND)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "openDmnd");
+    else if (pattern->type == LXW_CHART_PATTERN_SOLID_DIAMOND)
+        LXW_PUSH_ATTRIBUTES_STR("prst", "solidDmnd");
+    else
+        LXW_PUSH_ATTRIBUTES_STR("prst", "percent_50");
+
+    lxw_xml_start_tag(self->file, "a:pattFill", &attributes);
+
+    if (pattern->has_fg_color)
+        _chart_write_a_fg_clr(self, pattern->fg_color);
+
+    if (pattern->has_bg_color)
+        _chart_write_a_bg_clr(self, pattern->bg_color);
+
+    lxw_xml_end_tag(self->file, "a:pattFill");
 
     LXW_FREE_ATTRIBUTES();
 }
@@ -1353,12 +1705,35 @@ _chart_write_a_ln(lxw_chart *self)
  * Write the <c:spPr> element.
  */
 STATIC void
-_chart_write_sp_pr(lxw_chart *self)
+_chart_write_sp_pr(lxw_chart *self, lxw_chart_line *line,
+                   lxw_chart_fill *fill, lxw_chart_pattern *pattern)
 {
+    if (!line && !fill && !pattern)
+        return;
+
     lxw_xml_start_tag(self->file, "c:spPr", NULL);
 
-    /* Write the a:ln element. */
-    _chart_write_a_ln(self);
+    /* Write the series fill. Note: a pattern fill overrides a solid fill. */
+    if (fill && !pattern) {
+        if (fill->none) {
+            /* Write the a:noFill element. */
+            _chart_write_a_no_fill(self);
+        }
+        else {
+            /* Write the a:solidFill element. */
+            _chart_write_a_solid_fill(self, fill->color, fill->transparency);
+        }
+    }
+
+    if (pattern) {
+        /* Write the a:pattFill element. */
+        _chart_write_a_patt_fill(self, pattern);
+    }
+
+    if (line) {
+        /* Write the a:ln element. */
+        _chart_write_a_ln(self, line);
+    }
 
     lxw_xml_end_tag(self->file, "c:spPr");
 }
@@ -1440,9 +1815,45 @@ _chart_write_major_tick_mark(lxw_chart *self, lxw_chart_axis *axis)
         return;
 
     LXW_INIT_ATTRIBUTES();
-    LXW_PUSH_ATTRIBUTES_STR("val", "cross");
+
+    if (axis->major_tick_mark == LXW_CHART_AXIS_TICK_MARK_NONE)
+        LXW_PUSH_ATTRIBUTES_STR("val", "none");
+    else if (axis->major_tick_mark == LXW_CHART_AXIS_TICK_MARK_INSIDE)
+        LXW_PUSH_ATTRIBUTES_STR("val", "in");
+    else if (axis->major_tick_mark == LXW_CHART_AXIS_TICK_MARK_CROSSING)
+        LXW_PUSH_ATTRIBUTES_STR("val", "cross");
+    else
+        LXW_PUSH_ATTRIBUTES_STR("val", "out");
 
     lxw_xml_empty_tag(self->file, "c:majorTickMark", &attributes);
+
+    LXW_FREE_ATTRIBUTES();
+}
+
+/*
+ * Write the <c:minorTickMark> element.
+ */
+STATIC void
+_chart_write_minor_tick_mark(lxw_chart *self, lxw_chart_axis *axis)
+{
+    struct xml_attribute_list attributes;
+    struct xml_attribute *attribute;
+
+    if (!axis->minor_tick_mark)
+        return;
+
+    LXW_INIT_ATTRIBUTES();
+
+    if (axis->minor_tick_mark == LXW_CHART_AXIS_TICK_MARK_NONE)
+        LXW_PUSH_ATTRIBUTES_STR("val", "none");
+    else if (axis->minor_tick_mark == LXW_CHART_AXIS_TICK_MARK_INSIDE)
+        LXW_PUSH_ATTRIBUTES_STR("val", "in");
+    else if (axis->minor_tick_mark == LXW_CHART_AXIS_TICK_MARK_CROSSING)
+        LXW_PUSH_ATTRIBUTES_STR("val", "cross");
+    else
+        LXW_PUSH_ATTRIBUTES_STR("val", "out");
+
+    lxw_xml_empty_tag(self->file, "c:minorTickMark", &attributes);
 
     LXW_FREE_ATTRIBUTES();
 }
@@ -1451,16 +1862,52 @@ _chart_write_major_tick_mark(lxw_chart *self, lxw_chart_axis *axis)
  * Write the <c:symbol> element.
  */
 STATIC void
-_chart_write_symbol(lxw_chart *self)
+_chart_write_symbol(lxw_chart *self, uint8_t type)
 {
     struct xml_attribute_list attributes;
     struct xml_attribute *attribute;
-    char val[] = "none";
 
     LXW_INIT_ATTRIBUTES();
-    LXW_PUSH_ATTRIBUTES_STR("val", val);
+
+    if (type == LXW_CHART_MARKER_SQUARE)
+        LXW_PUSH_ATTRIBUTES_STR("val", "square");
+    else if (type == LXW_CHART_MARKER_DIAMOND)
+        LXW_PUSH_ATTRIBUTES_STR("val", "diamond");
+    else if (type == LXW_CHART_MARKER_TRIANGLE)
+        LXW_PUSH_ATTRIBUTES_STR("val", "triangle");
+    else if (type == LXW_CHART_MARKER_X)
+        LXW_PUSH_ATTRIBUTES_STR("val", "x");
+    else if (type == LXW_CHART_MARKER_STAR)
+        LXW_PUSH_ATTRIBUTES_STR("val", "star");
+    else if (type == LXW_CHART_MARKER_SHORT_DASH)
+        LXW_PUSH_ATTRIBUTES_STR("val", "short_dash");
+    else if (type == LXW_CHART_MARKER_LONG_DASH)
+        LXW_PUSH_ATTRIBUTES_STR("val", "long_dash");
+    else if (type == LXW_CHART_MARKER_CIRCLE)
+        LXW_PUSH_ATTRIBUTES_STR("val", "circle");
+    else if (type == LXW_CHART_MARKER_PLUS)
+        LXW_PUSH_ATTRIBUTES_STR("val", "plus");
+    else
+        LXW_PUSH_ATTRIBUTES_STR("val", "none");
 
     lxw_xml_empty_tag(self->file, "c:symbol", &attributes);
+
+    LXW_FREE_ATTRIBUTES();
+}
+
+/*
+ * Write the <c:size> element.
+ */
+STATIC void
+_chart_write_marker_size(lxw_chart *self, uint8_t size)
+{
+    struct xml_attribute_list attributes;
+    struct xml_attribute *attribute;
+
+    LXW_INIT_ATTRIBUTES();
+    LXW_PUSH_ATTRIBUTES_INT("val", size);
+
+    lxw_xml_empty_tag(self->file, "c:size", &attributes);
 
     LXW_FREE_ATTRIBUTES();
 }
@@ -1469,15 +1916,30 @@ _chart_write_symbol(lxw_chart *self)
  * Write the <c:marker> element.
  */
 STATIC void
-_chart_write_marker(lxw_chart *self)
+_chart_write_marker(lxw_chart *self, lxw_chart_marker *marker)
 {
-    if (!self->has_markers)
+    /* If there isn't a user defined marker use the default, if this chart
+     * type one. The default usually turns the marker off. */
+    if (!marker)
+        marker = self->default_marker;
+
+    if (!marker)
+        return;
+
+    if (marker->type == LXW_CHART_MARKER_AUTOMATIC)
         return;
 
     lxw_xml_start_tag(self->file, "c:marker", NULL);
 
     /* Write the c:symbol element. */
-    _chart_write_symbol(self);
+    _chart_write_symbol(self, marker->type);
+
+    /* Write the c:size element. */
+    if (marker->size)
+        _chart_write_marker_size(self, marker->size);
+
+    /* Write the c:spPr element. */
+    _chart_write_sp_pr(self, marker->line, marker->fill, marker->pattern);
 
     lxw_xml_end_tag(self->file, "c:marker");
 }
@@ -1627,8 +2089,11 @@ _chart_write_ser(lxw_chart *self, lxw_chart_series *series)
     /* Write the series name. */
     _chart_write_series_name(self, series);
 
+    /* Write the c:spPr element. */
+    _chart_write_sp_pr(self, series->line, series->fill, series->pattern);
+
     /* Write the c:marker element. */
-    _chart_write_marker(self);
+    _chart_write_marker(self, series->marker);
 
     /* Write the c:cat element. */
     _chart_write_cat(self, series);
@@ -1656,16 +2121,14 @@ _chart_write_xval_ser(lxw_chart *self, lxw_chart_series *series)
     /* Write the c:order element. */
     _chart_write_order(self, index);
 
-    if (self->type == LXW_CHART_SCATTER) {
-        /* Write the c:spPr element. */
-        _chart_write_sp_pr(self);
-    }
+    /* Write the series name. */
+    _chart_write_series_name(self, series);
 
-    if (self->type == LXW_CHART_SCATTER_STRAIGHT
-        || self->type == LXW_CHART_SCATTER_SMOOTH) {
-        /* Write the c:marker element. */
-        _chart_write_marker(self);
-    }
+    /* Write the c:spPr element. */
+    _chart_write_sp_pr(self, series->line, series->fill, series->pattern);
+
+    /* Write the c:marker element. */
+    _chart_write_marker(self, series->marker);
 
     /* Write the c:xVal element. */
     _chart_write_x_val(self, series);
@@ -1686,16 +2149,70 @@ _chart_write_xval_ser(lxw_chart *self, lxw_chart_series *series)
  * Write the <c:orientation> element.
  */
 STATIC void
-_chart_write_orientation(lxw_chart *self)
+_chart_write_orientation(lxw_chart *self, uint8_t reverse)
 {
     struct xml_attribute_list attributes;
     struct xml_attribute *attribute;
-    char val[] = "minMax";
 
     LXW_INIT_ATTRIBUTES();
-    LXW_PUSH_ATTRIBUTES_STR("val", val);
+    if (reverse)
+        LXW_PUSH_ATTRIBUTES_STR("val", "maxMin");
+    else
+        LXW_PUSH_ATTRIBUTES_STR("val", "minMax");
 
     lxw_xml_empty_tag(self->file, "c:orientation", &attributes);
+
+    LXW_FREE_ATTRIBUTES();
+}
+
+/*
+ * Write the <c:max> element.
+ */
+STATIC void
+_chart_write_max(lxw_chart *self, double max)
+{
+    struct xml_attribute_list attributes;
+    struct xml_attribute *attribute;
+    LXW_INIT_ATTRIBUTES();
+    LXW_PUSH_ATTRIBUTES_DBL("val", max);
+
+    lxw_xml_empty_tag(self->file, "c:max", &attributes);
+
+    LXW_FREE_ATTRIBUTES();
+}
+
+/*
+ * Write the <c:min> element.
+ */
+STATIC void
+_chart_write_min(lxw_chart *self, double min)
+{
+    struct xml_attribute_list attributes;
+    struct xml_attribute *attribute;
+    LXW_INIT_ATTRIBUTES();
+    LXW_PUSH_ATTRIBUTES_DBL("val", min);
+
+    lxw_xml_empty_tag(self->file, "c:min", &attributes);
+
+    LXW_FREE_ATTRIBUTES();
+}
+
+/*
+ * Write the <c:logBase> element.
+ */
+STATIC void
+_chart_write_log_base(lxw_chart *self, uint16_t log_base)
+{
+    struct xml_attribute_list attributes;
+    struct xml_attribute *attribute;
+
+    if (!log_base)
+        return;
+
+    LXW_INIT_ATTRIBUTES();
+    LXW_PUSH_ATTRIBUTES_INT("val", log_base);
+
+    lxw_xml_empty_tag(self->file, "c:logBase", &attributes);
 
     LXW_FREE_ATTRIBUTES();
 }
@@ -1704,12 +2221,27 @@ _chart_write_orientation(lxw_chart *self)
  * Write the <c:scaling> element.
  */
 STATIC void
-_chart_write_scaling(lxw_chart *self)
+_chart_write_scaling(lxw_chart *self, uint8_t reverse,
+                     uint8_t has_min, double min,
+                     uint8_t has_max, double max, uint16_t log_base)
 {
     lxw_xml_start_tag(self->file, "c:scaling", NULL);
 
+    /* Write the c:logBase element. */
+    _chart_write_log_base(self, log_base);
+
     /* Write the c:orientation element. */
-    _chart_write_orientation(self);
+    _chart_write_orientation(self, reverse);
+
+    if (has_max) {
+        /* Write the c:max element. */
+        _chart_write_max(self, max);
+    }
+
+    if (has_min) {
+        /* Write the c:min element. */
+        _chart_write_min(self, min);
+    }
 
     lxw_xml_end_tag(self->file, "c:scaling");
 }
@@ -1718,12 +2250,15 @@ _chart_write_scaling(lxw_chart *self)
  * Write the <c:axPos> element.
  */
 STATIC void
-_chart_write_axis_pos(lxw_chart *self, uint8_t position)
+_chart_write_axis_pos(lxw_chart *self, uint8_t position, uint8_t reverse)
 {
     struct xml_attribute_list attributes;
     struct xml_attribute *attribute;
 
     LXW_INIT_ATTRIBUTES();
+
+    /* Reverse the axis direction if required. */
+    position ^= reverse;
 
     if (position == LXW_CHART_AXIS_RIGHT)
         LXW_PUSH_ATTRIBUTES_STR("val", "r");
@@ -1743,14 +2278,21 @@ _chart_write_axis_pos(lxw_chart *self, uint8_t position)
  * Write the <c:tickLblPos> element.
  */
 STATIC void
-_chart_write_tick_lbl_pos(lxw_chart *self)
+_chart_write_tick_label_pos(lxw_chart *self, lxw_chart_axis *axis)
 {
     struct xml_attribute_list attributes;
     struct xml_attribute *attribute;
-    char val[] = "nextTo";
 
     LXW_INIT_ATTRIBUTES();
-    LXW_PUSH_ATTRIBUTES_STR("val", val);
+
+    if (axis->label_position == LXW_CHART_AXIS_LABEL_POSITION_HIGH)
+        LXW_PUSH_ATTRIBUTES_STR("val", "high");
+    else if (axis->label_position == LXW_CHART_AXIS_LABEL_POSITION_LOW)
+        LXW_PUSH_ATTRIBUTES_STR("val", "low");
+    else if (axis->label_position == LXW_CHART_AXIS_LABEL_POSITION_NONE)
+        LXW_PUSH_ATTRIBUTES_STR("val", "none");
+    else
+        LXW_PUSH_ATTRIBUTES_STR("val", "nextTo");
 
     lxw_xml_empty_tag(self->file, "c:tickLblPos", &attributes);
 
@@ -1778,16 +2320,37 @@ _chart_write_cross_axis(lxw_chart *self, uint32_t axis_id)
  * Write the <c:crosses> element.
  */
 STATIC void
-_chart_write_crosses(lxw_chart *self)
+_chart_write_crosses(lxw_chart *self, lxw_chart_axis *axis)
 {
     struct xml_attribute_list attributes;
     struct xml_attribute *attribute;
-    char val[] = "autoZero";
 
     LXW_INIT_ATTRIBUTES();
-    LXW_PUSH_ATTRIBUTES_STR("val", val);
+
+    if (axis->crossing_max)
+        LXW_PUSH_ATTRIBUTES_STR("val", "max");
+    else
+        LXW_PUSH_ATTRIBUTES_STR("val", "autoZero");
 
     lxw_xml_empty_tag(self->file, "c:crosses", &attributes);
+
+    LXW_FREE_ATTRIBUTES();
+}
+
+/*
+ * Write the <c:crossesAt> element.
+ */
+STATIC void
+_chart_write_crosses_at(lxw_chart *self, lxw_chart_axis *axis)
+{
+    struct xml_attribute_list attributes;
+    struct xml_attribute *attribute;
+
+    LXW_INIT_ATTRIBUTES();
+
+    LXW_PUSH_ATTRIBUTES_DBL("val", axis->crossing);
+
+    lxw_xml_empty_tag(self->file, "c:crossesAt", &attributes);
 
     LXW_FREE_ATTRIBUTES();
 }
@@ -1814,16 +2377,145 @@ _chart_write_auto(lxw_chart *self)
  * Write the <c:lblAlgn> element.
  */
 STATIC void
-_chart_write_lbl_algn(lxw_chart *self)
+_chart_write_label_align(lxw_chart *self)
 {
     struct xml_attribute_list attributes;
     struct xml_attribute *attribute;
-    char val[] = "ctr";
 
     LXW_INIT_ATTRIBUTES();
-    LXW_PUSH_ATTRIBUTES_STR("val", val);
+    LXW_PUSH_ATTRIBUTES_STR("val", "ctr");
 
     lxw_xml_empty_tag(self->file, "c:lblAlgn", &attributes);
+
+    LXW_FREE_ATTRIBUTES();
+}
+
+/*
+ * Write the <c:tickLblSkip> element.
+ */
+STATIC void
+_chart_write_tick_label_skip(lxw_chart *self, lxw_chart_axis *axis)
+{
+    struct xml_attribute_list attributes;
+    struct xml_attribute *attribute;
+
+    if (!axis->interval_unit)
+        return;
+
+    LXW_INIT_ATTRIBUTES();
+    LXW_PUSH_ATTRIBUTES_INT("val", axis->interval_unit);
+
+    lxw_xml_empty_tag(self->file, "c:tickLblSkip", &attributes);
+
+    LXW_FREE_ATTRIBUTES();
+}
+
+/*
+ * Write the <c:tickMarkSkip> element.
+ */
+STATIC void
+_chart_write_tick_mark_skip(lxw_chart *self, lxw_chart_axis *axis)
+{
+    struct xml_attribute_list attributes;
+    struct xml_attribute *attribute;
+
+    if (!axis->interval_tick)
+        return;
+
+    LXW_INIT_ATTRIBUTES();
+    LXW_PUSH_ATTRIBUTES_INT("val", axis->interval_tick);
+
+    lxw_xml_empty_tag(self->file, "c:tickMarkSkip", &attributes);
+
+    LXW_FREE_ATTRIBUTES();
+}
+
+/*
+ * Write the <c:majorUnit> element.
+ */
+STATIC void
+_chart_write_major_unit(lxw_chart *self, lxw_chart_axis *axis)
+{
+    struct xml_attribute_list attributes;
+    struct xml_attribute *attribute;
+
+    if (!axis->has_major_unit)
+        return;
+
+    LXW_INIT_ATTRIBUTES();
+    LXW_PUSH_ATTRIBUTES_DBL("val", axis->major_unit);
+
+    lxw_xml_empty_tag(self->file, "c:majorUnit", &attributes);
+
+    LXW_FREE_ATTRIBUTES();
+}
+
+/*
+ * Write the <c:minorUnit> element.
+ */
+STATIC void
+_chart_write_minor_unit(lxw_chart *self, lxw_chart_axis *axis)
+{
+    struct xml_attribute_list attributes;
+    struct xml_attribute *attribute;
+
+    if (!axis->has_minor_unit)
+        return;
+
+    LXW_INIT_ATTRIBUTES();
+    LXW_PUSH_ATTRIBUTES_DBL("val", axis->minor_unit);
+
+    lxw_xml_empty_tag(self->file, "c:minorUnit", &attributes);
+
+    LXW_FREE_ATTRIBUTES();
+}
+
+/*
+ * Write the <c:dispUnits> element.
+ */
+STATIC void
+_chart_write_disp_units(lxw_chart *self, lxw_chart_axis *axis)
+{
+    struct xml_attribute_list attributes;
+    struct xml_attribute *attribute;
+
+    if (!axis->display_units)
+        return;
+
+    LXW_INIT_ATTRIBUTES();
+
+    lxw_xml_start_tag(self->file, "c:dispUnits", NULL);
+
+    if (axis->display_units == LXW_CHART_AXIS_UNITS_HUNDREDS)
+        LXW_PUSH_ATTRIBUTES_STR("val", "hundreds");
+    else if (axis->display_units == LXW_CHART_AXIS_UNITS_THOUSANDS)
+        LXW_PUSH_ATTRIBUTES_STR("val", "thousands");
+    else if (axis->display_units == LXW_CHART_AXIS_UNITS_TEN_THOUSANDS)
+        LXW_PUSH_ATTRIBUTES_STR("val", "tenThousands");
+    else if (axis->display_units == LXW_CHART_AXIS_UNITS_HUNDRED_THOUSANDS)
+        LXW_PUSH_ATTRIBUTES_STR("val", "hundredThousands");
+    else if (axis->display_units == LXW_CHART_AXIS_UNITS_MILLIONS)
+        LXW_PUSH_ATTRIBUTES_STR("val", "millions");
+    else if (axis->display_units == LXW_CHART_AXIS_UNITS_TEN_MILLIONS)
+        LXW_PUSH_ATTRIBUTES_STR("val", "tenMillions");
+    else if (axis->display_units == LXW_CHART_AXIS_UNITS_HUNDRED_MILLIONS)
+        LXW_PUSH_ATTRIBUTES_STR("val", "hundredMillions");
+    else if (axis->display_units == LXW_CHART_AXIS_UNITS_BILLIONS)
+        LXW_PUSH_ATTRIBUTES_STR("val", "billions");
+    else if (axis->display_units == LXW_CHART_AXIS_UNITS_TRILLIONS)
+        LXW_PUSH_ATTRIBUTES_STR("val", "trillions");
+    else
+        LXW_PUSH_ATTRIBUTES_STR("val", "hundreds");
+
+    lxw_xml_empty_tag(self->file, "c:builtInUnit", &attributes);
+
+    if (axis->display_units_visible) {
+        lxw_xml_start_tag(self->file, "c:dispUnitsLbl", NULL);
+        lxw_xml_empty_tag(self->file, "c:layout", NULL);
+        lxw_xml_end_tag(self->file, "c:dispUnitsLbl");
+    }
+
+    lxw_xml_end_tag(self->file, "c:dispUnits");
 
     LXW_FREE_ATTRIBUTES();
 }
@@ -1832,14 +2524,13 @@ _chart_write_lbl_algn(lxw_chart *self)
  * Write the <c:lblOffset> element.
  */
 STATIC void
-_chart_write_lbl_offset(lxw_chart *self)
+_chart_write_label_offset(lxw_chart *self)
 {
     struct xml_attribute_list attributes;
     struct xml_attribute *attribute;
-    char val[] = "100";
 
     LXW_INIT_ATTRIBUTES();
-    LXW_PUSH_ATTRIBUTES_STR("val", val);
+    LXW_PUSH_ATTRIBUTES_STR("val", "100");
 
     lxw_xml_empty_tag(self->file, "c:lblOffset", &attributes);
 
@@ -1852,9 +2543,43 @@ _chart_write_lbl_offset(lxw_chart *self)
 STATIC void
 _chart_write_major_gridlines(lxw_chart *self, lxw_chart_axis *axis)
 {
+    if (!axis->major_gridlines.visible)
+        return;
 
-    if (axis->default_major_gridlines)
+    if (axis->major_gridlines.line) {
+        lxw_xml_start_tag(self->file, "c:majorGridlines", NULL);
+
+        /* Write the c:spPr element for the axis line. */
+        _chart_write_sp_pr(self, axis->major_gridlines.line, NULL, NULL);
+
+        lxw_xml_end_tag(self->file, "c:majorGridlines");
+    }
+    else {
         lxw_xml_empty_tag(self->file, "c:majorGridlines", NULL);
+    }
+}
+
+/*
+ * Write the <c:minorGridlines> element.
+ */
+STATIC void
+_chart_write_minor_gridlines(lxw_chart *self, lxw_chart_axis *axis)
+{
+    if (!axis->minor_gridlines.visible)
+        return;
+
+    if (axis->minor_gridlines.line) {
+        lxw_xml_start_tag(self->file, "c:minorGridlines", NULL);
+
+        /* Write the c:spPr element for the axis line. */
+        _chart_write_sp_pr(self, axis->minor_gridlines.line, NULL, NULL);
+
+        lxw_xml_end_tag(self->file, "c:minorGridlines");
+
+    }
+    else {
+        lxw_xml_empty_tag(self->file, "c:minorGridlines", NULL);
+    }
 }
 
 /*
@@ -1880,14 +2605,17 @@ _chart_write_number_format(lxw_chart *self, lxw_chart_axis *axis)
  * Write the <c:crossBetween> element.
  */
 STATIC void
-_chart_write_cross_between(lxw_chart *self)
+_chart_write_cross_between(lxw_chart *self, uint8_t position)
 {
     struct xml_attribute_list attributes;
     struct xml_attribute *attribute;
 
+    if (!position)
+        position = self->default_cross_between;
+
     LXW_INIT_ATTRIBUTES();
 
-    if (self->cross_between)
+    if (position == LXW_CHART_AXIS_POSITION_ON_TICK)
         LXW_PUSH_ATTRIBUTES_STR("val", "midCat");
     else
         LXW_PUSH_ATTRIBUTES_STR("val", "between");
@@ -2050,20 +2778,15 @@ _chart_write_page_margins(lxw_chart *self)
 {
     struct xml_attribute_list attributes;
     struct xml_attribute *attribute;
-    char b[] = "0.75";
-    char l[] = "0.7";
-    char r[] = "0.7";
-    char t[] = "0.75";
-    char header[] = "0.3";
-    char footer[] = "0.3";
 
     LXW_INIT_ATTRIBUTES();
-    LXW_PUSH_ATTRIBUTES_STR("b", b);
-    LXW_PUSH_ATTRIBUTES_STR("l", l);
-    LXW_PUSH_ATTRIBUTES_STR("r", r);
-    LXW_PUSH_ATTRIBUTES_STR("t", t);
-    LXW_PUSH_ATTRIBUTES_STR("header", header);
-    LXW_PUSH_ATTRIBUTES_STR("footer", footer);
+
+    LXW_PUSH_ATTRIBUTES_STR("b", "0.75");
+    LXW_PUSH_ATTRIBUTES_STR("l", "0.7");
+    LXW_PUSH_ATTRIBUTES_STR("r", "0.7");
+    LXW_PUSH_ATTRIBUTES_STR("t", "0.75");
+    LXW_PUSH_ATTRIBUTES_STR("header", "0.3");
+    LXW_PUSH_ATTRIBUTES_STR("footer", "0.3");
 
     lxw_xml_empty_tag(self->file, "c:pageMargins", &attributes);
 
@@ -2154,20 +2877,29 @@ _chart_write_chart_title(lxw_chart *self)
 STATIC void
 _chart_write_cat_axis(lxw_chart *self)
 {
-    uint8_t position = self->cat_axis_position;
-
     lxw_xml_start_tag(self->file, "c:catAx", NULL);
 
     _chart_write_axis_id(self, self->axis_id_1);
 
-    /* Write the c:scaling element. */
-    _chart_write_scaling(self);
+    /* Write the c:scaling element. Note we can't set max, min, or log base
+     * for a Category axis in Excel.*/
+    _chart_write_scaling(self,
+                         self->x_axis->reverse,
+                         LXW_FALSE, 0.0, LXW_FALSE, 0.0, 0);
+
+    /* Write the c:delete element to hide axis. */
+    if (self->x_axis->hidden)
+        _chart_write_delete(self);
 
     /* Write the c:axPos element. */
-    _chart_write_axis_pos(self, position);
+    _chart_write_axis_pos(self, self->x_axis->axis_position,
+                          self->y_axis->reverse);
 
     /* Write the c:majorGridlines element. */
     _chart_write_major_gridlines(self, self->x_axis);
+
+    /* Write the c:minorGridlines element. */
+    _chart_write_minor_gridlines(self, self->x_axis);
 
     /* Write the axis title elements. */
     self->x_axis->title.is_horizontal = self->has_horiz_cat_axis;
@@ -2180,8 +2912,15 @@ _chart_write_cat_axis(lxw_chart *self)
     /* Write the c:majorTickMark element. */
     _chart_write_major_tick_mark(self, self->x_axis);
 
+    /* Write the c:minorTickMark element. */
+    _chart_write_minor_tick_mark(self, self->x_axis);
+
     /* Write the c:tickLblPos element. */
-    _chart_write_tick_lbl_pos(self);
+    _chart_write_tick_label_pos(self, self->x_axis);
+
+    /* Write the c:spPr element for the axis line. */
+    _chart_write_sp_pr(self, self->x_axis->line, self->x_axis->fill,
+                       self->x_axis->pattern);
 
     /* Write the axis font elements. */
     _chart_write_axis_font(self, self->x_axis->num_font);
@@ -2190,16 +2929,25 @@ _chart_write_cat_axis(lxw_chart *self)
     _chart_write_cross_axis(self, self->axis_id_2);
 
     /* Write the c:crosses element. */
-    _chart_write_crosses(self);
+    if (!self->y_axis->has_crossing || self->y_axis->crossing_max)
+        _chart_write_crosses(self, self->y_axis);
+    else
+        _chart_write_crosses_at(self, self->y_axis);
 
     /* Write the c:auto element. */
     _chart_write_auto(self);
 
     /* Write the c:lblAlgn element. */
-    _chart_write_lbl_algn(self);
+    _chart_write_label_align(self);
 
     /* Write the c:lblOffset element. */
-    _chart_write_lbl_offset(self);
+    _chart_write_label_offset(self);
+
+    /* Write the c:tickLblSkip element. */
+    _chart_write_tick_label_skip(self, self->x_axis);
+
+    /* Write the c:tickMarkSkip element. */
+    _chart_write_tick_mark_skip(self, self->x_axis);
 
     lxw_xml_end_tag(self->file, "c:catAx");
 }
@@ -2210,20 +2958,30 @@ _chart_write_cat_axis(lxw_chart *self)
 STATIC void
 _chart_write_val_axis(lxw_chart *self)
 {
-    uint8_t position = self->val_axis_position;
-
     lxw_xml_start_tag(self->file, "c:valAx", NULL);
 
     _chart_write_axis_id(self, self->axis_id_2);
 
     /* Write the c:scaling element. */
-    _chart_write_scaling(self);
+    _chart_write_scaling(self,
+                         self->y_axis->reverse,
+                         self->y_axis->has_min, self->y_axis->min,
+                         self->y_axis->has_max, self->y_axis->max,
+                         self->y_axis->log_base);
+
+    /* Write the c:delete element to hide axis. */
+    if (self->y_axis->hidden)
+        _chart_write_delete(self);
 
     /* Write the c:axPos element. */
-    _chart_write_axis_pos(self, position);
+    _chart_write_axis_pos(self, self->y_axis->axis_position,
+                          self->x_axis->reverse);
 
     /* Write the c:majorGridlines element. */
     _chart_write_major_gridlines(self, self->y_axis);
+
+    /* Write the c:minorGridlines element. */
+    _chart_write_minor_gridlines(self, self->y_axis);
 
     /* Write the axis title elements. */
     self->y_axis->title.is_horizontal = self->has_horiz_val_axis;
@@ -2235,8 +2993,15 @@ _chart_write_val_axis(lxw_chart *self)
     /* Write the c:majorTickMark element. */
     _chart_write_major_tick_mark(self, self->y_axis);
 
+    /* Write the c:minorTickMark element. */
+    _chart_write_minor_tick_mark(self, self->y_axis);
+
     /* Write the c:tickLblPos element. */
-    _chart_write_tick_lbl_pos(self);
+    _chart_write_tick_label_pos(self, self->y_axis);
+
+    /* Write the c:spPr element for the axis line. */
+    _chart_write_sp_pr(self, self->y_axis->line, self->y_axis->fill,
+                       self->y_axis->pattern);
 
     /* Write the axis font elements. */
     _chart_write_axis_font(self, self->y_axis->num_font);
@@ -2245,10 +3010,22 @@ _chart_write_val_axis(lxw_chart *self)
     _chart_write_cross_axis(self, self->axis_id_1);
 
     /* Write the c:crosses element. */
-    _chart_write_crosses(self);
+    if (!self->x_axis->has_crossing || self->x_axis->crossing_max)
+        _chart_write_crosses(self, self->x_axis);
+    else
+        _chart_write_crosses_at(self, self->x_axis);
 
     /* Write the c:crossBetween element. */
-    _chart_write_cross_between(self);
+    _chart_write_cross_between(self, self->x_axis->position_axis);
+
+    /* Write the c:majorUnit element. */
+    _chart_write_major_unit(self, self->y_axis);
+
+    /* Write the c:minorUnit element. */
+    _chart_write_minor_unit(self, self->y_axis);
+
+    /* Write the c:dispUnits element. */
+    _chart_write_disp_units(self, self->y_axis);
 
     lxw_xml_end_tag(self->file, "c:valAx");
 }
@@ -2259,17 +3036,30 @@ _chart_write_val_axis(lxw_chart *self)
 STATIC void
 _chart_write_cat_val_axis(lxw_chart *self)
 {
-    uint8_t position = self->cat_axis_position;
-
     lxw_xml_start_tag(self->file, "c:valAx", NULL);
 
     _chart_write_axis_id(self, self->axis_id_1);
 
     /* Write the c:scaling element. */
-    _chart_write_scaling(self);
+    _chart_write_scaling(self,
+                         self->x_axis->reverse,
+                         self->x_axis->has_min, self->x_axis->min,
+                         self->x_axis->has_max, self->x_axis->max,
+                         self->x_axis->log_base);
+
+    /* Write the c:delete element to hide axis. */
+    if (self->x_axis->hidden)
+        _chart_write_delete(self);
 
     /* Write the c:axPos element. */
-    _chart_write_axis_pos(self, position);
+    _chart_write_axis_pos(self, self->x_axis->axis_position,
+                          self->y_axis->reverse);
+
+    /* Write the c:majorGridlines element. */
+    _chart_write_major_gridlines(self, self->x_axis);
+
+    /* Write the c:minorGridlines element. */
+    _chart_write_minor_gridlines(self, self->x_axis);
 
     /* Write the axis title elements. */
     self->x_axis->title.is_horizontal = self->has_horiz_val_axis;
@@ -2281,8 +3071,15 @@ _chart_write_cat_val_axis(lxw_chart *self)
     /* Write the c:majorTickMark element. */
     _chart_write_major_tick_mark(self, self->x_axis);
 
+    /* Write the c:minorTickMark element. */
+    _chart_write_minor_tick_mark(self, self->x_axis);
+
     /* Write the c:tickLblPos element. */
-    _chart_write_tick_lbl_pos(self);
+    _chart_write_tick_label_pos(self, self->x_axis);
+
+    /* Write the c:spPr element for the axis line. */
+    _chart_write_sp_pr(self, self->x_axis->line, self->x_axis->fill,
+                       self->x_axis->pattern);
 
     /* Write the axis font elements. */
     _chart_write_axis_font(self, self->x_axis->num_font);
@@ -2291,10 +3088,22 @@ _chart_write_cat_val_axis(lxw_chart *self)
     _chart_write_cross_axis(self, self->axis_id_2);
 
     /* Write the c:crosses element. */
-    _chart_write_crosses(self);
+    if (!self->y_axis->has_crossing || self->y_axis->crossing_max)
+        _chart_write_crosses(self, self->y_axis);
+    else
+        _chart_write_crosses_at(self, self->y_axis);
 
     /* Write the c:crossBetween element. */
-    _chart_write_cross_between(self);
+    _chart_write_cross_between(self, self->y_axis->position_axis);
+
+    /* Write the c:majorUnit element. */
+    _chart_write_major_unit(self, self->x_axis);
+
+    /* Write the c:minorUnit element. */
+    _chart_write_minor_unit(self, self->x_axis);
+
+    /* Write the c:dispUnits element. */
+    _chart_write_disp_units(self, self->x_axis);
 
     lxw_xml_end_tag(self->file, "c:valAx");
 }
@@ -2501,6 +3310,23 @@ _chart_write_scatter_chart(lxw_chart *self)
     _chart_write_scatter_style(self);
 
     STAILQ_FOREACH(series, self->series_list, list_pointers) {
+
+        /* Add default scatter chart formatting to the series data unless
+         * it has already been specified by the user.*/
+        if (self->type == LXW_CHART_SCATTER) {
+            if (!series->line) {
+                lxw_chart_line line = {
+                    0x000000,
+                    LXW_TRUE,
+                    2.25,
+                    LXW_CHART_LINE_DASH_SOLID,
+                    0,
+                    LXW_FALSE
+                };
+                series->line = _chart_convert_line_args(&line);
+            }
+        }
+
         /* Write the c:ser element. */
         _chart_write_xval_ser(self, series);
     }
@@ -2541,6 +3367,19 @@ _chart_write_radar_chart(lxw_chart *self)
 }
 
 /*
+ * Reverse the opposite axis position if crossing position is "max".
+ */
+STATIC void
+_chart_adjust_max_crossing(lxw_chart *self)
+{
+    if (self->x_axis->crossing_max)
+        self->y_axis->axis_position ^= 1;
+
+    if (self->y_axis->crossing_max)
+        self->x_axis->axis_position ^= 1;
+}
+
+/*
  * Write the <c:plotArea> element.
  */
 STATIC void
@@ -2554,6 +3393,9 @@ _chart_write_scatter_plot_area(lxw_chart *self)
     /* Write subclass chart type elements for primary and secondary axes. */
     self->write_chart_type(self);
 
+    /* Reverse the opposite axis position if crossing position is "max". */
+    _chart_adjust_max_crossing(self);
+
     /* Write the c:catAx element. */
     _chart_write_cat_val_axis(self);
 
@@ -2561,6 +3403,10 @@ _chart_write_scatter_plot_area(lxw_chart *self)
 
     /* Write the c:valAx element. */
     _chart_write_val_axis(self);
+
+    /* Write the c:spPr element for the plotarea formatting. */
+    _chart_write_sp_pr(self, self->plotarea_line, self->plotarea_fill,
+                       self->plotarea_pattern);
 
     lxw_xml_end_tag(self->file, "c:plotArea");
 }
@@ -2596,11 +3442,18 @@ _chart_write_plot_area(lxw_chart *self)
     /* Write subclass chart type elements for primary and secondary axes. */
     self->write_chart_type(self);
 
+    /* Reverse the opposite axis position if crossing position is "max". */
+    _chart_adjust_max_crossing(self);
+
     /* Write the c:catAx element. */
     _chart_write_cat_axis(self);
 
     /* Write the c:valAx element. */
     _chart_write_val_axis(self);
+
+    /* Write the c:spPr element for the plotarea formatting. */
+    _chart_write_sp_pr(self, self->plotarea_line, self->plotarea_fill,
+                       self->plotarea_pattern);
 
     lxw_xml_end_tag(self->file, "c:plotArea");
 }
@@ -2635,7 +3488,8 @@ STATIC void
 _chart_initialize_area_chart(lxw_chart *self, uint8_t type)
 {
     self->grouping = LXW_GROUPING_STANDARD;
-    self->cross_between = LXW_CHART_AXIS_POSITION_ON_TICK;
+    self->default_cross_between = LXW_CHART_AXIS_POSITION_ON_TICK;
+    self->x_axis->is_category = LXW_TRUE;
 
     if (type == LXW_CHART_AREA_STACKED) {
         self->grouping = LXW_GROUPING_STACKED;
@@ -2654,21 +3508,29 @@ _chart_initialize_area_chart(lxw_chart *self, uint8_t type)
 }
 
 /*
+ * Swap/reverse the bar chart axes prior to writing. It is the only chart
+ * with the category axis in the vertical direction.
+ */
+STATIC void
+_chart_swap_bar_axes(lxw_chart *self)
+{
+    lxw_chart_axis *tmp = self->x_axis;
+    self->x_axis = self->y_axis;
+    self->y_axis = tmp;
+}
+
+/*
  * Initialize a bar chart.
  */
 STATIC void
 _chart_initialize_bar_chart(lxw_chart *self, uint8_t type)
 {
-    lxw_chart_axis *tmp;
-
-    /* Reverse the X and Y axes for Bar charts. */
-    tmp = self->x_axis;
-    self->x_axis = self->y_axis;
-    self->y_axis = tmp;
-
-    /*Also reverse some of the defaults. */
-    self->x_axis->default_major_gridlines = LXW_FALSE;
-    self->y_axis->default_major_gridlines = LXW_TRUE;
+    /* Note: Bar chart category/value axis are reversed in comparison to
+     *       other charts. Some of the defaults reflect this. */
+    self->x_axis->major_gridlines.visible = LXW_TRUE;
+    self->y_axis->major_gridlines.visible = LXW_FALSE;
+    self->y_axis->is_category = LXW_TRUE;
+    self->x_axis->is_value = LXW_TRUE;
     self->has_horiz_cat_axis = LXW_TRUE;
     self->has_horiz_val_axis = LXW_FALSE;
 
@@ -2680,14 +3542,10 @@ _chart_initialize_bar_chart(lxw_chart *self, uint8_t type)
 
     if (type == LXW_CHART_BAR_STACKED_PERCENT) {
         self->grouping = LXW_GROUPING_PERCENTSTACKED;
-        lxw_strcpy((self->y_axis)->default_num_format, "0%");
+        lxw_strcpy((self->x_axis)->default_num_format, "0%");
         self->has_overlap = LXW_TRUE;
         self->subtype = LXW_CHART_SUBTYPE_STACKED;
     }
-
-    /* Override the default axis positions for a bar chart. */
-    self->cat_axis_position = LXW_CHART_AXIS_LEFT;
-    self->val_axis_position = LXW_CHART_AXIS_BOTTOM;
 
     /* Initialize the function pointers for this chart type. */
     self->write_chart_type = _chart_write_bar_chart;
@@ -2701,6 +3559,8 @@ STATIC void
 _chart_initialize_column_chart(lxw_chart *self, uint8_t type)
 {
     self->has_horiz_val_axis = LXW_FALSE;
+    self->x_axis->is_category = LXW_TRUE;
+    self->y_axis->is_value = LXW_TRUE;
 
     if (type == LXW_CHART_COLUMN_STACKED) {
         self->grouping = LXW_GROUPING_STACKED;
@@ -2726,8 +3586,6 @@ _chart_initialize_column_chart(lxw_chart *self, uint8_t type)
 STATIC void
 _chart_initialize_doughnut_chart(lxw_chart *self)
 {
-    self->has_markers = LXW_FALSE;
-
     /* Initialize the function pointers for this chart type. */
     self->write_chart_type = _chart_write_doughnut_chart;
     self->write_plot_area = _chart_write_pie_plot_area;
@@ -2739,8 +3597,10 @@ _chart_initialize_doughnut_chart(lxw_chart *self)
 STATIC void
 _chart_initialize_line_chart(lxw_chart *self)
 {
-    self->has_markers = LXW_TRUE;
+    _chart_set_default_marker_type(self, LXW_CHART_MARKER_NONE);
     self->grouping = LXW_GROUPING_STANDARD;
+    self->x_axis->is_category = LXW_TRUE;
+    self->y_axis->is_value = LXW_TRUE;
 
     /* Initialize the function pointers for this chart type. */
     self->write_chart_type = _chart_write_line_chart;
@@ -2753,8 +3613,6 @@ _chart_initialize_line_chart(lxw_chart *self)
 STATIC void
 _chart_initialize_pie_chart(lxw_chart *self)
 {
-    self->has_markers = LXW_FALSE;
-
     /* Initialize the function pointers for this chart type. */
     self->write_chart_type = _chart_write_pie_chart;
     self->write_plot_area = _chart_write_pie_plot_area;
@@ -2767,9 +3625,16 @@ STATIC void
 _chart_initialize_scatter_chart(lxw_chart *self)
 {
     self->has_horiz_val_axis = LXW_FALSE;
-    self->cross_between = LXW_CHART_AXIS_POSITION_ON_TICK;
-    self->is_scatter = LXW_TRUE;
-    self->has_markers = LXW_TRUE;
+    self->default_cross_between = LXW_CHART_AXIS_POSITION_ON_TICK;
+    self->is_scatter_chart = LXW_TRUE;
+    self->x_axis->is_value = LXW_TRUE;
+    self->y_axis->is_value = LXW_TRUE;
+
+    if (self->type == LXW_CHART_SCATTER_STRAIGHT
+        || self->type == LXW_CHART_SCATTER_SMOOTH) {
+
+        _chart_set_default_marker_type(self, LXW_CHART_MARKER_NONE);
+    }
 
     /* Initialize the function pointers for this chart type. */
     self->write_chart_type = _chart_write_scatter_chart;
@@ -2783,10 +3648,13 @@ STATIC void
 _chart_initialize_radar_chart(lxw_chart *self, uint8_t type)
 {
     if (type == LXW_CHART_RADAR)
-        self->has_markers = LXW_TRUE;
+        _chart_set_default_marker_type(self, LXW_CHART_MARKER_NONE);
 
-    self->x_axis->default_major_gridlines = LXW_TRUE;
-    self->y_axis->major_tick_mark = LXW_TRUE;
+    self->x_axis->major_gridlines.visible = LXW_TRUE;
+    self->x_axis->is_category = LXW_TRUE;
+    self->y_axis->is_value = LXW_TRUE;
+
+    self->y_axis->major_tick_mark = LXW_CHART_AXIS_TICK_MARK_CROSSING;
 
     /* Initialize the function pointers for this chart type. */
     self->write_chart_type = _chart_write_radar_chart;
@@ -2857,8 +3725,10 @@ _chart_initialize(lxw_chart *self, uint8_t type)
 void
 lxw_chart_assemble_xml_file(lxw_chart *self)
 {
-    /* Initialize the chart specific properties. */
-    _chart_initialize(self, self->type);
+    /* Reverse the X and Y axes for Bar charts. */
+    if (self->type == LXW_CHART_BAR || self->type == LXW_CHART_BAR_STACKED
+        || self->type == LXW_CHART_BAR_STACKED_PERCENT)
+        _chart_swap_bar_axes(self);
 
     /* Write the XML declaration. */
     _chart_xml_declaration(self);
@@ -2875,6 +3745,10 @@ lxw_chart_assemble_xml_file(lxw_chart *self)
     /* Write the c:chart element. */
     _chart_write_chart(self);
 
+    /* Write the c:spPr element for the chartarea formatting. */
+    _chart_write_sp_pr(self, self->chartarea_line, self->chartarea_fill,
+                       self->chartarea_pattern);
+
     /* Write the c:printSettings element. */
     _chart_write_print_settings(self);
 
@@ -2890,7 +3764,7 @@ lxw_chart_assemble_xml_file(lxw_chart *self)
 /*
  * Add data to a data cache in a range object, for testing only.
  */
-int
+lxw_error
 lxw_chart_add_data_cache(lxw_series_range *range, uint8_t *data,
                          uint16_t rows, uint8_t cols, uint8_t col)
 {
@@ -2903,11 +3777,12 @@ lxw_chart_add_data_cache(lxw_series_range *range, uint8_t *data,
     /* Initialize the series range data cache. */
     for (i = 0; i < rows; i++) {
         data_point = calloc(1, sizeof(struct lxw_series_data_point));
+        RETURN_ON_MEM_ERROR(data_point, LXW_ERROR_MEMORY_MALLOC_FAILED);
         STAILQ_INSERT_TAIL(range->data_cache, data_point, list_pointers);
         data_point->number = data[i * cols + col];
     }
 
-    return 0;
+    return LXW_NO_ERROR;
 }
 
 /*
@@ -3044,6 +3919,145 @@ chart_series_set_values(lxw_chart_series *series, const char *sheetname,
 }
 
 /*
+ * Set a line type for a series.
+ */
+void
+chart_series_set_line(lxw_chart_series *series, lxw_chart_line *line)
+{
+    if (!line)
+        return;
+
+    /* Free any previously allocated resource. */
+    free(series->line);
+
+    series->line = _chart_convert_line_args(line);
+}
+
+/*
+ * Set a fill type for a series.
+ */
+void
+chart_series_set_fill(lxw_chart_series *series, lxw_chart_fill *fill)
+{
+    if (!fill)
+        return;
+
+    /* Free any previously allocated resource. */
+    free(series->fill);
+
+    series->fill = _chart_convert_fill_args(fill);
+}
+
+/*
+ * Set a pattern type for a series.
+ */
+void
+chart_series_set_pattern(lxw_chart_series *series, lxw_chart_pattern *pattern)
+{
+    if (!pattern)
+        return;
+
+    /* Free any previously allocated resource. */
+    free(series->pattern);
+
+    series->pattern = _chart_convert_pattern_args(pattern);
+}
+
+/*
+ * Set a marker type for a series.
+ */
+void
+chart_series_set_marker_type(lxw_chart_series *series, uint8_t type)
+{
+    if (!series->marker) {
+        lxw_chart_marker *marker = calloc(1, sizeof(struct lxw_chart_marker));
+        RETURN_VOID_ON_MEM_ERROR(marker);
+        series->marker = marker;
+    }
+
+    series->marker->type = type;
+}
+
+/*
+ * Set a marker size for a series.
+ */
+void
+chart_series_set_marker_size(lxw_chart_series *series, uint8_t size)
+{
+    if (!series->marker) {
+        lxw_chart_marker *marker = calloc(1, sizeof(struct lxw_chart_marker));
+        RETURN_VOID_ON_MEM_ERROR(marker);
+        series->marker = marker;
+    }
+
+    series->marker->size = size;
+}
+
+/*
+ * Set a line type for a series marker.
+ */
+void
+chart_series_set_marker_line(lxw_chart_series *series, lxw_chart_line *line)
+{
+    if (!line)
+        return;
+
+    if (!series->marker) {
+        lxw_chart_marker *marker = calloc(1, sizeof(struct lxw_chart_marker));
+        RETURN_VOID_ON_MEM_ERROR(marker);
+        series->marker = marker;
+    }
+
+    /* Free any previously allocated resource. */
+    free(series->marker->line);
+
+    series->marker->line = _chart_convert_line_args(line);
+}
+
+/*
+ * Set a fill type for a series marker.
+ */
+void
+chart_series_set_marker_fill(lxw_chart_series *series, lxw_chart_fill *fill)
+{
+    if (!fill)
+        return;
+
+    if (!series->marker) {
+        lxw_chart_marker *marker = calloc(1, sizeof(struct lxw_chart_marker));
+        RETURN_VOID_ON_MEM_ERROR(marker);
+        series->marker = marker;
+    }
+
+    /* Free any previously allocated resource. */
+    free(series->marker->fill);
+
+    series->marker->fill = _chart_convert_fill_args(fill);
+}
+
+/*
+ * Set a pattern type for a series.
+ */
+void
+chart_series_set_marker_pattern(lxw_chart_series *series,
+                                lxw_chart_pattern *pattern)
+{
+    if (!pattern)
+        return;
+
+    if (!series->marker) {
+        lxw_chart_marker *marker = calloc(1, sizeof(struct lxw_chart_marker));
+        RETURN_VOID_ON_MEM_ERROR(marker);
+        series->marker = marker;
+    }
+
+    /* Free any previously allocated resource. */
+    free(series->marker->pattern);
+
+    series->marker->pattern = _chart_convert_pattern_args(pattern);
+}
+
+/*
  * Set an axis caption.
  */
 void
@@ -3080,6 +4094,9 @@ chart_axis_set_name_range(lxw_chart_axis *axis, const char *sheetname,
 void
 chart_axis_set_name_font(lxw_chart_axis *axis, lxw_chart_font *font)
 {
+    /* Free any previously allocated resource. */
+    free(axis->title.font);
+
     axis->title.font = _chart_convert_font_args(font);
 }
 
@@ -3089,7 +4106,295 @@ chart_axis_set_name_font(lxw_chart_axis *axis, lxw_chart_font *font)
 void
 chart_axis_set_num_font(lxw_chart_axis *axis, lxw_chart_font *font)
 {
+    /* Free any previously allocated resource. */
+    free(axis->num_font);
+
     axis->num_font = _chart_convert_font_args(font);
+}
+
+/*
+ * Set a line type for an axis.
+ */
+void
+chart_axis_set_line(lxw_chart_axis *axis, lxw_chart_line *line)
+{
+    if (!line)
+        return;
+
+    /* Free any previously allocated resource. */
+    free(axis->line);
+
+    axis->line = _chart_convert_line_args(line);
+}
+
+/*
+ * Set a fill type for an axis.
+ */
+void
+chart_axis_set_fill(lxw_chart_axis *axis, lxw_chart_fill *fill)
+{
+    if (!fill)
+        return;
+
+    /* Free any previously allocated resource. */
+    free(axis->fill);
+
+    axis->fill = _chart_convert_fill_args(fill);
+}
+
+/*
+ * Set a pattern type for an axis.
+ */
+void
+chart_axis_set_pattern(lxw_chart_axis *axis, lxw_chart_pattern *pattern)
+{
+    if (!pattern)
+        return;
+
+    /* Free any previously allocated resource. */
+    free(axis->pattern);
+
+    axis->pattern = _chart_convert_pattern_args(pattern);
+}
+
+/*
+ * Reverse the direction of an axis.
+ */
+void
+chart_axis_set_reverse(lxw_chart_axis *axis)
+{
+    axis->reverse = LXW_TRUE;
+}
+
+/*
+ * Set the axis crossing position.
+ */
+void
+chart_axis_set_crossing(lxw_chart_axis *axis, double value)
+{
+    axis->has_crossing = LXW_TRUE;
+    axis->crossing = value;
+}
+
+/*
+ * Set the axis crossing position as the max possible value.
+ */
+void
+chart_axis_set_crossing_max(lxw_chart_axis *axis)
+{
+    axis->has_crossing = LXW_TRUE;
+    axis->crossing_max = LXW_TRUE;
+}
+
+/*
+ * Turn off/hide the axis.
+ */
+void
+chart_axis_off(lxw_chart_axis *axis)
+{
+    axis->hidden = LXW_TRUE;
+}
+
+/*
+ * Set the category axis position.
+ */
+void
+chart_axis_set_position(lxw_chart_axis *axis, uint8_t position)
+{
+    LXW_WARN_CAT_AND_DATE_AXIS_ONLY("chart_axis_set_position");
+
+    axis->position_axis = position;
+}
+
+/*
+ * Set the axis label position.
+ */
+void
+chart_axis_set_label_position(lxw_chart_axis *axis, uint8_t position)
+{
+    axis->label_position = position;
+}
+
+/*
+ * Set the minimum value for an axis.
+ */
+void
+chart_axis_set_min(lxw_chart_axis *axis, double min)
+{
+    LXW_WARN_VALUE_AND_DATE_AXIS_ONLY("chart_axis_set_min");
+
+    axis->min = min;
+    axis->has_min = LXW_TRUE;
+}
+
+/*
+ * Set the maximum value for an axis.
+ */
+void
+chart_axis_set_max(lxw_chart_axis *axis, double max)
+{
+    LXW_WARN_VALUE_AND_DATE_AXIS_ONLY("chart_axis_set_max");
+
+    axis->max = max;
+    axis->has_max = LXW_TRUE;
+}
+
+/*
+ * Set the log base for an axis.
+ */
+void
+chart_axis_set_log_base(lxw_chart_axis *axis, uint16_t log_base)
+{
+    LXW_WARN_VALUE_AXIS_ONLY("chart_axis_set_log_base");
+
+    /* Excel log range is 2-1000. */
+    if (log_base >= 2 && log_base <= 1000)
+        axis->log_base = log_base;
+}
+
+/*
+ * Set the major mark for an axis.
+ */
+void
+chart_axis_set_major_tick_mark(lxw_chart_axis *axis, uint8_t type)
+{
+    axis->major_tick_mark = type;
+}
+
+/*
+ * Set the minor mark for an axis.
+ */
+void
+chart_axis_set_minor_tick_mark(lxw_chart_axis *axis, uint8_t type)
+{
+    axis->minor_tick_mark = type;
+}
+
+/*
+ * Set interval unit for a category axis.
+ */
+void
+chart_axis_set_interval_unit(lxw_chart_axis *axis, uint16_t unit)
+{
+    LXW_WARN_CAT_AND_DATE_AXIS_ONLY("chart_axis_set_major_unit");
+
+    axis->interval_unit = unit;
+}
+
+/*
+ * Set tick interval for a category axis.
+ */
+void
+chart_axis_set_interval_tick(lxw_chart_axis *axis, uint16_t unit)
+{
+    LXW_WARN_CAT_AND_DATE_AXIS_ONLY("chart_axis_set_major_tick");
+
+    axis->interval_tick = unit;
+}
+
+/*
+ * Set major unit for a value axis.
+ */
+void
+chart_axis_set_major_unit(lxw_chart_axis *axis, double unit)
+{
+    LXW_WARN_VALUE_AND_DATE_AXIS_ONLY("chart_axis_set_major_unit");
+
+    axis->has_major_unit = LXW_TRUE;
+    axis->major_unit = unit;
+}
+
+/*
+ * Set minor unit for a value axis.
+ */
+void
+chart_axis_set_minor_unit(lxw_chart_axis *axis, double unit)
+{
+    LXW_WARN_VALUE_AND_DATE_AXIS_ONLY("chart_axis_set_minor_unit");
+
+    axis->has_minor_unit = LXW_TRUE;
+    axis->minor_unit = unit;
+}
+
+/*
+ * Set the display units for a value axis.
+ */
+void
+chart_axis_set_display_units(lxw_chart_axis *axis, uint8_t units)
+{
+    LXW_WARN_VALUE_AXIS_ONLY("chart_axis_set_display_units");
+
+    axis->display_units = units;
+    axis->display_units_visible = LXW_TRUE;
+}
+
+/*
+ * Turn on/off the display units for a value axis.
+ */
+void
+chart_axis_set_display_units_visible(lxw_chart_axis *axis, uint8_t visible)
+{
+    LXW_WARN_VALUE_AXIS_ONLY("chart_axis_set_display_units");
+
+    axis->display_units_visible = visible;
+}
+
+/*
+ * Set the axis major gridlines on/off.
+ */
+void
+chart_axis_major_gridlines_set_visible(lxw_chart_axis *axis, uint8_t visible)
+{
+    axis->major_gridlines.visible = visible;
+}
+
+/*
+ * Set a line type for the major gridlines.
+ */
+void
+chart_axis_major_gridlines_set_line(lxw_chart_axis *axis,
+                                    lxw_chart_line *line)
+{
+    if (!line)
+        return;
+
+    /* Free any previously allocated resource. */
+    free(axis->major_gridlines.line);
+
+    axis->major_gridlines.line = _chart_convert_line_args(line);
+
+    /* If the gridline has a format it should also be visible. */
+    if (axis->major_gridlines.line)
+        axis->major_gridlines.visible = LXW_TRUE;
+}
+
+/*
+ * Set the axis minor gridlines on/off.
+ */
+void
+chart_axis_minor_gridlines_set_visible(lxw_chart_axis *axis, uint8_t visible)
+{
+    axis->minor_gridlines.visible = visible;
+}
+
+/*
+ * Set a line type for the minor gridlines.
+ */
+void
+chart_axis_minor_gridlines_set_line(lxw_chart_axis *axis,
+                                    lxw_chart_line *line)
+{
+    if (!line)
+        return;
+
+    /* Free any previously allocated resource. */
+    free(axis->minor_gridlines.line);
+
+    axis->minor_gridlines.line = _chart_convert_line_args(line);
+
+    /* If the gridline has a format it should also be visible. */
+    if (axis->minor_gridlines.line)
+        axis->minor_gridlines.visible = LXW_TRUE;
 }
 
 /*
@@ -3129,6 +4434,9 @@ chart_title_set_name_range(lxw_chart *self, const char *sheetname,
 void
 chart_title_set_name_font(lxw_chart *self, lxw_chart_font *font)
 {
+    /* Free any previously allocated resource. */
+    free(self->title.font);
+
     self->title.font = _chart_convert_font_args(font);
 }
 
@@ -3156,6 +4464,9 @@ chart_legend_set_position(lxw_chart *self, uint8_t position)
 void
 chart_legend_set_font(lxw_chart *self, lxw_chart_font *font)
 {
+    /* Free any previously allocated resource. */
+    free(self->legend.font);
+
     self->legend.font = _chart_convert_font_args(font);
 }
 
@@ -3173,6 +4484,9 @@ chart_legend_delete_series(lxw_chart *self, int16_t delete_series[])
     while (delete_series[count] > 0)
         count++;
 
+    if (count == 0)
+        return LXW_ERROR_NULL_PARAMETER_IGNORED;
+
     /* The maximum number of series in a chart is 255. */
     if (count > 255)
         count = 255;
@@ -3183,6 +4497,96 @@ chart_legend_delete_series(lxw_chart *self, int16_t delete_series[])
     self->delete_series_count = count;
 
     return LXW_NO_ERROR;
+}
+
+/*
+ * Set a line type for the chartarea.
+ */
+void
+chart_chartarea_set_line(lxw_chart *self, lxw_chart_line *line)
+{
+    if (!line)
+        return;
+
+    /* Free any previously allocated resource. */
+    free(self->chartarea_line);
+
+    self->chartarea_line = _chart_convert_line_args(line);
+}
+
+/*
+ * Set a fill type for the chartarea.
+ */
+void
+chart_chartarea_set_fill(lxw_chart *self, lxw_chart_fill *fill)
+{
+    if (!fill)
+        return;
+
+    /* Free any previously allocated resource. */
+    free(self->chartarea_fill);
+
+    self->chartarea_fill = _chart_convert_fill_args(fill);
+}
+
+/*
+ * Set a pattern type for the chartarea.
+ */
+void
+chart_chartarea_set_pattern(lxw_chart *self, lxw_chart_pattern *pattern)
+{
+    if (!pattern)
+        return;
+
+    /* Free any previously allocated resource. */
+    free(self->chartarea_pattern);
+
+    self->chartarea_pattern = _chart_convert_pattern_args(pattern);
+}
+
+/*
+ * Set a line type for the plotarea.
+ */
+void
+chart_plotarea_set_line(lxw_chart *self, lxw_chart_line *line)
+{
+    if (!line)
+        return;
+
+    /* Free any previously allocated resource. */
+    free(self->plotarea_line);
+
+    self->plotarea_line = _chart_convert_line_args(line);
+}
+
+/*
+ * Set a fill type for the plotarea.
+ */
+void
+chart_plotarea_set_fill(lxw_chart *self, lxw_chart_fill *fill)
+{
+    if (!fill)
+        return;
+
+    /* Free any previously allocated resource. */
+    free(self->plotarea_fill);
+
+    self->plotarea_fill = _chart_convert_fill_args(fill);
+}
+
+/*
+ * Set a pattern type for the plotarea.
+ */
+void
+chart_plotarea_set_pattern(lxw_chart *self, lxw_chart_pattern *pattern)
+{
+    if (!pattern)
+        return;
+
+    /* Free any previously allocated resource. */
+    free(self->plotarea_pattern);
+
+    self->plotarea_pattern = _chart_convert_pattern_args(pattern);
 }
 
 /*
