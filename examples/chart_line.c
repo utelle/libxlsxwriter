@@ -50,7 +50,7 @@ int main() {
 
 
     /*
-     * Create a line chart.
+     * Chart 1. Create a line chart.
      */
     lxw_chart *chart = workbook_add_chart(workbook, LXW_CHART_LINE);
 

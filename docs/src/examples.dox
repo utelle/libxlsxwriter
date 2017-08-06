@@ -615,10 +615,17 @@ Filled radar chart:
 </tr>
 </table>
 
-Example of creating an Excel Pie chart.
+Examples of creating an Excel Pie chart.
 
 The default pie chart:
 @image html chart_pie1.png
+
+A pie chart with user defined colors:
+@image html chart_pie2.png
+
+A pie chart with rotated segments:
+@image html chart_pie3.png
+
 
 
 
@@ -629,7 +636,7 @@ The default pie chart:
 <table  width="600">
 <tr>
   <td>@ref chart_pie.c "&lt;&lt; chart_pie.c"</td>
-  <td align="right">@ref chart_fonts.c "chart_fonts.c &gt;&gt;"</td>
+  <td align="right">@ref chart_clustered.c "chart_clustered.c &gt;&gt;"</td>
 </tr>
 </table>
 
@@ -637,6 +644,96 @@ Example of creating an Excel Doughnut chart.
 
 The default doughnut chart:
 @image html chart_doughnut1.png
+
+It is possible to define chart colors for most types of libxlsxwriter charts
+via the series formatting functions. However, Pie/Doughnut charts are a
+special case since each segment is represented as a point so it is necessary
+to assign formatting to each point in the series.
+
+Chart 4 shows how to set segment colors and other options.
+@image html chart_doughnut2.png
+
+
+
+
+
+@example chart_clustered.c
+
+<table  width="600">
+<tr>
+  <td>@ref chart_doughnut.c "&lt;&lt; chart_doughnut.c"</td>
+  <td align="right">@ref chart_data_table.c "chart_data_table.c &gt;&gt;"</td>
+</tr>
+</table>
+
+Example of creating a clustered Excel chart where there are two levels of
+category on the X axis.
+
+The categories in clustered charts are 2D ranges, instead of the more normal
+1D ranges. The series are shown as formula strings for clarity but you can
+also use the a list syntax.
+
+@image html chart_clustered.png
+
+
+
+
+
+@example chart_data_table.c
+
+<table  width="600">
+<tr>
+  <td>@ref chart_clustered.c "&lt;&lt; chart_clustered.c"</td>
+  <td align="right">@ref chart_data_tools.c "chart_data_tools.c &gt;&gt;"</td>
+</tr>
+</table>
+
+Example of creating charts with data tables.
+
+Chart 1 in the following example is a column chart with default data table:
+@image html chart_data_table1.png
+
+
+Chart 2 is a column chart with default data table with legend keys:
+@image html chart_data_table2.png
+
+
+
+
+
+@example chart_data_tools.c
+
+<table  width="600">
+<tr>
+  <td>@ref chart_data_table.c "&lt;&lt; chart_data_table.c"</td>
+  <td align="right">@ref chart_fonts.c "chart_fonts.c &gt;&gt;"</td>
+</tr>
+</table>
+
+A demo of an various Excel chart data tools that are available via a
+libxlsxwriter chart. These include Drop Lines and High-Low Lines.
+
+
+Chart 1: chart with high-low lines.
+@image html chart_data_tools5.png
+
+Chart 2: chart with drop lines.
+@image html chart_data_tools6.png
+
+Chart 3: chart with up-down bars.
+@image html chart_data_tools4.png
+
+Chart 4: chart with formatted Up-down bars.
+@image html chart_data_tools7.png
+
+Chart 5: chart with markers and data labels.
+@image html chart_data_tools8.png
+
+Chart 6: chart with error bars.
+@image html chart_data_tools3.png
+
+Chart 7: chart with a trendline.
+@image html chart_data_tools9.png
 
 
 
@@ -646,7 +743,7 @@ The default doughnut chart:
 
 <table  width="600">
 <tr>
-  <td>@ref chart_doughnut.c "&lt;&lt; chart_doughnut.c"</td>
+  <td>@ref chart_data_tools.c "&lt;&lt; chart_data_tools.c"</td>
   <td align="right">@ref chart_pattern.c "chart_pattern.c &gt;&gt;"</td>
 </tr>
 </table>

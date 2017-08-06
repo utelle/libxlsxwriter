@@ -81,6 +81,7 @@ STAILQ_HEAD(lxw_chart_series_list, lxw_chart_series);
 STAILQ_HEAD(lxw_series_data_points, lxw_series_data_point);
 
 #define LXW_CHART_NUM_FORMAT_LEN 128
+#define LXW_CHART_DEFAULT_GAP 501
 
 /**
  * @brief Available chart types.
@@ -408,6 +409,61 @@ typedef enum lxw_chart_pattern_type {
     LXW_CHART_PATTERN_SOLID_DIAMOND
 } lxw_chart_pattern_type;
 
+/**
+ * @brief Chart data label positions.
+ */
+typedef enum lxw_chart_label_position {
+    /** Series data label position: default position. */
+    LXW_CHART_LABEL_POSITION_DEFAULT,
+
+    /** Series data label position: center. */
+    LXW_CHART_LABEL_POSITION_CENTER,
+
+    /** Series data label position: right. */
+    LXW_CHART_LABEL_POSITION_RIGHT,
+
+    /** Series data label position: left. */
+    LXW_CHART_LABEL_POSITION_LEFT,
+
+    /** Series data label position: above. */
+    LXW_CHART_LABEL_POSITION_ABOVE,
+
+    /** Series data label position: below. */
+    LXW_CHART_LABEL_POSITION_BELOW,
+
+    /** Series data label position: inside base.  */
+    LXW_CHART_LABEL_POSITION_INSIDE_BASE,
+
+    /** Series data label position: inside end. */
+    LXW_CHART_LABEL_POSITION_INSIDE_END,
+
+    /** Series data label position: outside end. */
+    LXW_CHART_LABEL_POSITION_OUTSIDE_END,
+
+    /** Series data label position: best fit. */
+    LXW_CHART_LABEL_POSITION_BEST_FIT
+} lxw_chart_label_position;
+
+/**
+ * @brief Chart data label separator.
+ */
+typedef enum lxw_chart_label_separator {
+    /** Series data label separator: comma (the default). */
+    LXW_CHART_LABEL_SEPARATOR_COMMA,
+
+    /** Series data label separator: semicolon. */
+    LXW_CHART_LABEL_SEPARATOR_SEMICOLON,
+
+    /** Series data label separator: period. */
+    LXW_CHART_LABEL_SEPARATOR_PERIOD,
+
+    /** Series data label separator: newline. */
+    LXW_CHART_LABEL_SEPARATOR_NEWLINE,
+
+    /** Series data label separator: space. */
+    LXW_CHART_LABEL_SEPARATOR_SPACE
+} lxw_chart_label_separator;
+
 enum lxw_chart_subtype {
 
     LXW_CHART_SUBTYPE_NONE = 0,
@@ -512,13 +568,6 @@ typedef enum lxw_chart_axis_tick_mark {
     /** Tick mark inside and outside the axis. */
     LXW_CHART_AXIS_TICK_MARK_CROSSING
 } lxw_chart_tick_mark;
-
-enum lxw_chart_position {
-    LXW_CHART_AXIS_RIGHT,
-    LXW_CHART_AXIS_LEFT,
-    LXW_CHART_AXIS_TOP,
-    LXW_CHART_AXIS_BOTTOM
-};
 
 typedef struct lxw_series_range {
     char *formula;
@@ -626,7 +675,7 @@ typedef struct lxw_chart_font {
     char *name;
 
     /** The chart font size. The default is 11. */
-    uint16_t size;
+    double size;
 
     /** The chart font bold property. Set to 0 or 1. */
     uint8_t bold;
@@ -687,6 +736,126 @@ typedef struct lxw_chart_title {
 } lxw_chart_title;
 
 /**
+ * @brief Struct to represent an Excel chart data point.
+ *
+ * The lxw_chart_point used to set the line, fill and pattern of one or more
+ * points in a chart data series. See @ref chart_points.
+ */
+typedef struct lxw_chart_point {
+
+    /** The line/border for the chart point. See @ref chart_lines. */
+    lxw_chart_line *line;
+
+    /** The fill for the chart point. See @ref chart_fills. */
+    lxw_chart_fill *fill;
+
+    /** The pattern for the chart point. See @ref chart_patterns.*/
+    lxw_chart_pattern *pattern;
+
+} lxw_chart_point;
+
+/**
+ * @brief Define how blank values are displayed in a chart.
+ */
+typedef enum lxw_chart_blank {
+
+    /** Show empty chart cells as gaps in the data. The default. */
+    LXW_CHART_BLANKS_AS_GAP,
+
+    /** Show empty chart cells as zeros. */
+    LXW_CHART_BLANKS_AS_ZERO,
+
+    /** Show empty chart cells as connected. Only for charts with lines. */
+    LXW_CHART_BLANKS_AS_CONNECTED
+} lxw_chart_blank;
+
+enum lxw_chart_position {
+    LXW_CHART_AXIS_RIGHT,
+    LXW_CHART_AXIS_LEFT,
+    LXW_CHART_AXIS_TOP,
+    LXW_CHART_AXIS_BOTTOM
+};
+
+/**
+ * @brief Type/amount of data series error bar.
+ */
+typedef enum lxw_chart_error_bar_type {
+    /** Error bar type: Standard error. */
+    LXW_CHART_ERROR_BAR_TYPE_STD_ERROR,
+
+    /** Error bar type: Fixed value. */
+    LXW_CHART_ERROR_BAR_TYPE_FIXED,
+
+    /** Error bar type: Percentage. */
+    LXW_CHART_ERROR_BAR_TYPE_PERCENTAGE,
+
+    /** Error bar type: Standard deviation(s). */
+    LXW_CHART_ERROR_BAR_TYPE_STD_DEV
+} lxw_chart_error_bar_type;
+
+/**
+ * @brief Direction for a data series error bar.
+ */
+typedef enum lxw_chart_error_bar_direction {
+
+    /** Error bar extends in both directions. The default. */
+    LXW_CHART_ERROR_BAR_DIR_BOTH,
+
+    /** Error bar extends in positive direction. */
+    LXW_CHART_ERROR_BAR_DIR_PLUS,
+
+    /** Error bar extends in negative direction. */
+    LXW_CHART_ERROR_BAR_DIR_MINUS
+} lxw_chart_error_bar_direction;
+
+/**
+ * @brief End cap styles for a data series error bar.
+ */
+typedef enum lxw_chart_error_bar_cap {
+    /** Flat end cap. The default. */
+    LXW_CHART_ERROR_BAR_END_CAP,
+
+    /** No end cap. */
+    LXW_CHART_ERROR_BAR_NO_CAP
+} lxw_chart_error_bar_cap;
+
+typedef struct lxw_series_error_bars {
+    uint8_t type;
+    uint8_t direction;
+    uint8_t endcap;
+    uint8_t has_value;
+    uint8_t is_set;
+    uint8_t is_x;
+    uint8_t chart_group;
+    double value;
+    lxw_chart_line *line;
+
+} lxw_series_error_bars;
+
+/**
+ * @brief Series trendline/regression types.
+ */
+typedef enum lxw_chart_trendline_type {
+    /** Trendline type: Linear. */
+    LXW_CHART_TRENDLINE_TYPE_LINEAR,
+
+    /** Trendline type: Logarithm. */
+    LXW_CHART_TRENDLINE_TYPE_LOG,
+
+    /** Trendline type: Polynomial. */
+    LXW_CHART_TRENDLINE_TYPE_POLY,
+
+    /** Trendline type: Power. */
+    LXW_CHART_TRENDLINE_TYPE_POWER,
+
+    /** Trendline type: Exponential. */
+    LXW_CHART_TRENDLINE_TYPE_EXP,
+
+    /** Trendline type: Moving Average. */
+    LXW_CHART_TRENDLINE_TYPE_AVERAGE
+} lxw_chart_trendline_type;
+
+/**
  * @brief Struct to represent an Excel chart data series.
  *
  * The lxw_chart_series is created using the chart_add_series function. It is
@@ -702,6 +871,42 @@ typedef struct lxw_chart_series {
     lxw_chart_fill *fill;
     lxw_chart_pattern *pattern;
     lxw_chart_marker *marker;
+    lxw_chart_point *points;
+    uint16_t point_count;
+
+    uint8_t smooth;
+    uint8_t invert_if_negative;
+
+    /* Data label parameters. */
+    uint8_t has_labels;
+    uint8_t show_labels_value;
+    uint8_t show_labels_category;
+    uint8_t show_labels_name;
+    uint8_t show_labels_leader;
+    uint8_t show_labels_legend;
+    uint8_t show_labels_percent;
+    uint8_t label_position;
+    uint8_t label_separator;
+    uint8_t default_label_position;
+    char *label_num_format;
+    lxw_chart_font *label_font;
+
+    lxw_series_error_bars *x_error_bars;
+    lxw_series_error_bars *y_error_bars;
+
+    uint8_t has_trendline;
+    uint8_t has_trendline_forecast;
+    uint8_t has_trendline_equation;
+    uint8_t has_trendline_r_squared;
+    uint8_t has_trendline_intercept;
+    uint8_t trendline_type;
+    uint8_t trendline_value;
+    double trendline_forward;
+    double trendline_backward;
+    uint8_t trendline_value_type;
+    char *trendline_name;
+    lxw_chart_line *trendline_line;
+    double trendline_intercept;
 
     STAILQ_ENTRY (lxw_chart_series) list_pointers;
 
@@ -725,8 +930,9 @@ typedef struct lxw_chart_axis {
 
     lxw_chart_title title;
 
-    char num_format[LXW_CHART_NUM_FORMAT_LEN];
-    char default_num_format[LXW_CHART_NUM_FORMAT_LEN];
+    char *num_format;
+    char *default_num_format;
+    uint8_t source_linked;
 
     uint8_t major_tick_mark;
     uint8_t minor_tick_mark;
@@ -811,7 +1017,7 @@ typedef struct lxw_chart {
     uint32_t axis_id_4;
 
     uint8_t in_use;
-    uint8_t is_scatter_chart;
+    uint8_t chart_group;
     uint8_t cat_has_num_fmt;
 
     uint8_t has_horiz_cat_axis;
@@ -823,7 +1029,10 @@ typedef struct lxw_chart {
 
     uint8_t no_title;
     uint8_t has_overlap;
-    int series_overlap_1;
+    int8_t overlap_y1;
+    int8_t overlap_y2;
+    uint16_t gap_y1;
+    uint16_t gap_y2;
 
     uint8_t grouping;
     uint8_t default_cross_between;
@@ -840,7 +1049,31 @@ typedef struct lxw_chart {
     lxw_chart_fill *plotarea_fill;
     lxw_chart_pattern *plotarea_pattern;
 
+    uint8_t has_drop_lines;
+    lxw_chart_line *drop_lines_line;
+
+    uint8_t has_high_low_lines;
+    lxw_chart_line *high_low_lines_line;
+
     struct lxw_chart_series_list *series_list;
+
+    uint8_t has_table;
+    uint8_t has_table_vertical;
+    uint8_t has_table_horizontal;
+    uint8_t has_table_outline;
+    uint8_t has_table_legend_keys;
+    lxw_chart_font *table_font;
+
+    uint8_t show_blanks_as;
+    uint8_t show_hidden_data;
+
+    uint8_t has_up_down_bars;
+    lxw_chart_line *up_bar_line;
+    lxw_chart_line *down_bar_line;
+    lxw_chart_fill *up_bar_fill;
+    lxw_chart_fill *down_bar_fill;
+
+    uint8_t default_label_position;
 
     STAILQ_ENTRY (lxw_chart) ordered_list_pointers;
     STAILQ_ENTRY (lxw_chart) list_pointers;
@@ -1098,6 +1331,21 @@ void chart_series_set_line(lxw_chart_series *series, lxw_chart_line *line);
 void chart_series_set_fill(lxw_chart_series *series, lxw_chart_fill *fill);
 
 /**
+ * @brief Invert the fill color for negative series values.
+ *
+ * @param series  A series object created via `chart_add_series()`.
+ *
+ * Invert the fill color for negative values. Usually only applicable to
+ * column and bar charts.
+ *
+ * @code
+ *     chart_series_set_invert_if_negative(series);
+ * @endcode
+ *
+ */
+void chart_series_set_invert_if_negative(lxw_chart_series *series);
+
+/**
  * @brief Set the pattern properties for a chart series.
  *
  * @param series  A series object created via `chart_add_series()`.
@@ -1268,6 +1516,645 @@ void chart_series_set_marker_pattern(lxw_chart_series *series,
                                      lxw_chart_pattern *pattern);
 
 /**
+ * @brief Set the formatting for points in the series.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ * @param points An NULL terminated array of #lxw_chart_point pointers.
+ *
+ * @return A #lxw_error.
+ *
+ * In general formatting is applied to an entire series in a chart. However,
+ * it is occasionally required to format individual points in a series. In
+ * particular this is required for Pie/Doughnut charts where each segment is
+ * represented by a point.
+ *
+ * @dontinclude chart_pie_colors.c
+ * @skip Add the data series
+ * @until chart_series_set_points
+ *
+ * @image html chart_points1.png
+ *
+ * @note The array of #lxw_chart_point pointers should be NULL terminated
+ * as shown in the example.
+ *
+ * For more details see @ref chart_points
+ */
+lxw_error chart_series_set_points(lxw_chart_series *series,
+                                  lxw_chart_point *points[]);
+
+/**
+ * @brief Smooth a line or scatter chart series.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ * @param smooth Turn off/on the line smoothing. (0/1)
+ *
+ * The `chart_series_set_smooth()` function is used to set the smooth property
+ * of a line series. It is only applicable to the line and scatter chart
+ * types:
+ *
+ * @code
+ *     chart_series_set_smooth(series2, LXW_TRUE);
+ * @endcode
+ *
+ * @image html chart_smooth.png
+ *
+ *
+ */
+void chart_series_set_smooth(lxw_chart_series *series, uint8_t smooth);
+
+/**
+ * @brief Add data labels to a chart series.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ *
+ * The `%chart_series_set_labels()` function is used to turn on data labels
+ * for a chart series. Data labels indicate the values of the plotted data
+ * points.
+ *
+ * @code
+ *     chart_series_set_labels(series);
+ * @endcode
+ *
+ * @image html chart_labels1.png
+ *
+ * By default data labels are displayed in Excel with only the values shown:
+ *
+ * @image html chart_labels2.png
+ *
+ * However, it is possible to configure other display options, as shown
+ * in the functions below.
+ *
+ * For more information see @ref chart_labels.
+ */
+void chart_series_set_labels(lxw_chart_series *series);
+
+/**
+ * @brief Set the display options for the labels of a data series.
+ *
+ * @param series        A series object created via `chart_add_series()`.
+ * @param show_name     Turn on/off the series name in the label caption.
+ * @param show_category Turn on/off the category name in the label caption.
+ * @param show_value    Turn on/off the value in the label caption.
+ *
+ * The `%chart_series_set_labels_options()` function is used to set the
+ * parameters that are displayed in the series data label:
+ *
+ * @code
+ *     chart_series_set_labels(series);
+ *     chart_series_set_labels_options(series, LXW_TRUE, LXW_TRUE, LXW_TRUE);
+ * @endcode
+ *
+ * @image html chart_labels3.png
+ *
+ * For more information see @ref chart_labels.
+ */
+void chart_series_set_labels_options(lxw_chart_series *series,
+                                     uint8_t show_name, uint8_t show_category,
+                                     uint8_t show_value);
+
+/**
+ * @brief Set the separator for the data label captions.
+ *
+ * @param series    A series object created via `chart_add_series()`.
+ * @param separator The separator for the data label options:
+ *                  #lxw_chart_label_separator.
+ *
+ * The `%chart_series_set_labels_separator()` function is used to change the
+ * separator between multiple data label items. The default options is a comma
+ * separator as shown in the previous example.
+ *
+ * The available options are:
+ *
+ * - #LXW_CHART_LABEL_SEPARATOR_SEMICOLON: semicolon separator.
+ * - #LXW_CHART_LABEL_SEPARATOR_PERIOD: a period (dot) separator.
+ * - #LXW_CHART_LABEL_SEPARATOR_NEWLINE: a newline separator.
+ * - #LXW_CHART_LABEL_SEPARATOR_SPACE: a space separator.
+ *
+ * For example:
+ *
+ * @code
+ *     chart_series_set_labels(series);
+ *     chart_series_set_labels_options(series, LXW_TRUE, LXW_TRUE, LXW_TRUE);
+ *     chart_series_set_labels_separator(series, LXW_CHART_LABEL_SEPARATOR_NEWLINE);
+ * @endcode
+ *
+ * @image html chart_labels4.png
+ *
+ * For more information see @ref chart_labels.
+ */
+void chart_series_set_labels_separator(lxw_chart_series *series,
+                                       uint8_t separator);
+
+/**
+ * @brief Set the data label position for a series.
+ *
+ * @param series   A series object created via `chart_add_series()`.
+ * @param position The data label position: #lxw_chart_label_position.
+ *
+ * The `%chart_series_set_labels_position()` function sets the position of
+ * the labels in the data series:
+ *
+ * @code
+ *     chart_series_set_labels(series);
+ *     chart_series_set_labels_position(series, LXW_CHART_LABEL_POSITION_ABOVE);
+ * @endcode
+ *
+ * @image html chart_labels5.png
+ *
+ * In Excel the allowable data label positions vary for different chart
+ * types. The allowable, and default, positions are:
+ *
+ * | Position                              | Line, Scatter | Bar, Column   | Pie, Doughnut | Area, Radar   |
+ * | :------------------------------------ | :------------ | :------------ | :------------ | :------------ |
+ * | #LXW_CHART_LABEL_POSITION_CENTER      | Yes           | Yes           | Yes           | Yes (default) |
+ * | #LXW_CHART_LABEL_POSITION_RIGHT       | Yes (default) |               |               |               |
+ * | #LXW_CHART_LABEL_POSITION_LEFT        | Yes           |               |               |               |
+ * | #LXW_CHART_LABEL_POSITION_ABOVE       | Yes           |               |               |               |
+ * | #LXW_CHART_LABEL_POSITION_BELOW       | Yes           |               |               |               |
+ * | #LXW_CHART_LABEL_POSITION_INSIDE_BASE |               | Yes           |               |               |
+ * | #LXW_CHART_LABEL_POSITION_INSIDE_END  |               | Yes           | Yes           |               |
+ * | #LXW_CHART_LABEL_POSITION_OUTSIDE_END |               | Yes (default) | Yes           |               |
+ * | #LXW_CHART_LABEL_POSITION_BEST_FIT    |               |               | Yes (default) |               |
+ *
+ *
+ * For more information see @ref chart_labels.
+ */
+void chart_series_set_labels_position(lxw_chart_series *series,
+                                      uint8_t position);
+
+/**
+ * @brief Set leader lines for Pie and Doughnut charts.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ *
+ * The `%chart_series_set_labels_leader_line()` function  is used to turn on
+ * leader lines for the data label of a series. It is mainly used for pie
+ * or doughnut charts:
+ *
+ * @code
+ *     chart_series_set_labels(series);
+ *     chart_series_set_labels_leader_line(series);
+ * @endcode
+ *
+ * @note Even when leader lines are turned on they aren't automatically
+ *       visible in Excel or XlsxWriter. Due to an Excel limitation
+ *       (or design) leader lines only appear if the data label is moved
+ *       manually or if the data labels are very close and need to be
+ *       adjusted automatically.
+ *
+ * For more information see @ref chart_labels.
+ */
+void chart_series_set_labels_leader_line(lxw_chart_series *series);
+
+/**
+ * @brief Set the legend key for a data label in a chart series.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ *
+ * The `%chart_series_set_labels_legend()` function is used to set the
+ * legend key for a data series:
+ *
+ * @code
+ *     chart_series_set_labels(series);
+ *     chart_series_set_labels_legend(series);
+ * @endcode
+ *
+ * @image html chart_labels6.png
+ *
+ * For more information see @ref chart_labels.
+ */
+void chart_series_set_labels_legend(lxw_chart_series *series);
+
+/**
+ * @brief Set the percentage for a Pie/Doughnut data point.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ *
+ * The `%chart_series_set_labels_percentage()` function is used to turn on
+ * the display of data labels as a percentage for a series. It is mainly
+ * used for pie charts:
+ *
+ * @code
+ *     chart_series_set_labels(series);
+ *     chart_series_set_labels_options(series, LXW_FALSE, LXW_FALSE, LXW_FALSE);
+ *     chart_series_set_labels_percentage(series);
+ * @endcode
+ *
+ * @image html chart_labels7.png
+ *
+ * For more information see @ref chart_labels.
+ */
+void chart_series_set_labels_percentage(lxw_chart_series *series);
+
+/**
+ * @brief Set the number format for chart data labels in a series.
+ *
+ * @param series     A series object created via `chart_add_series()`.
+ * @param num_format The number format string.
+ *
+ * The `%chart_series_set_labels_num_format()` function is used to set the
+ * number format for data labels:
+ *
+ * @code
+ *     chart_series_set_labels(series);
+ *     chart_series_set_labels_num_format(series, "$0.00");
+ * @endcode
+ *
+ * @image html chart_labels8.png
+ *
+ * The number format is similar to the Worksheet Cell Format num_format,
+ * see `format_set_num_format()`.
+ *
+ * For more information see @ref chart_labels.
+ */
+void chart_series_set_labels_num_format(lxw_chart_series *series,
+                                        const char *num_format);
+
+/**
+ * @brief Set the font properties for chart data labels in a series
+ *
+ * @param series A series object created via `chart_add_series()`.
+ * @param font   A pointer to a chart #lxw_chart_font font struct.
+ *
+ *
+ * The `%chart_series_set_labels_font()` function is used to set the font
+ * for data labels:
+ *
+ * @code
+ *     lxw_chart_font font = {.name = "Consolas", .color = LXW_COLOR_RED};
+ *
+ *     chart_series_set_labels(series);
+ *     chart_series_set_labels_font(series, &font);
+ * @endcode
+ *
+ * @image html chart_labels9.png
+ *
+ * For more information see @ref chart_fonts and @ref chart_labels.
+ *
+ */
+void chart_series_set_labels_font(lxw_chart_series *series,
+                                  lxw_chart_font *font);
+
+/**
+ * @brief Turn on a trendline for a chart data series.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ * @param type   The type of trendline: #lxw_chart_trendline_type.
+ * @param value  The order/period value for polynomial and moving average
+ *               trendlines.
+ *
+ * A trendline can be added to a chart series to indicate trends in the data
+ * such as a moving average or a polynomial fit. The trendlines types are
+ * shown in the following Excel dialog:
+ *
+ * @image html chart_trendline0.png
+ *
+ * The `%chart_series_set_trendline()` function turns on these trendlines for
+ * a data series:
+ *
+ * @code
+ *     chart = workbook_add_chart(workbook, LXW_CHART_LINE);
+ *     series = chart_add_series(chart, NULL, "Sheet1!$A$1:$A$6");
+ *
+ *     chart_series_set_trendline(series, LXW_CHART_TRENDLINE_TYPE_LINEAR, 0);
+ * @endcode
+ *
+ * @image html chart_trendline2.png
+ *
+ * The `value` parameter corresponds to *order* for a polynomial trendline
+ * and *period* for a Moving Average trendline. It both cases it must be >= 2.
+ * The `value` parameter  is ignored for all other trendlines:
+ *
+ * @code
+ *     chart_series_set_trendline(series, LXW_CHART_TRENDLINE_TYPE_AVERAGE, 2);
+ * @endcode
+ *
+ * @image html chart_trendline3.png
+ *
+ * The allowable values for the the trendline `type` are:
+ *
+ * - #LXW_CHART_TRENDLINE_TYPE_LINEAR: Linear trendline.
+ * - #LXW_CHART_TRENDLINE_TYPE_LOG: Logarithm trendline.
+ * - #LXW_CHART_TRENDLINE_TYPE_POLY: Polynomial trendline. The `value`
+ *   parameter corresponds to *order*.
+ * - #LXW_CHART_TRENDLINE_TYPE_POWER: Power trendline.
+ * - #LXW_CHART_TRENDLINE_TYPE_EXP: Exponential trendline.
+ * - #LXW_CHART_TRENDLINE_TYPE_AVERAGE: Moving Average trendline. The `value`
+ *   parameter corresponds to *period*.
+ *
+ * Other trendline options, such as those shown in the following Excel
+ * dialog, can be set using the functions below.
+ *
+ * @image html chart_trendline1.png
+ *
+ * For more information see @ref chart_trendlines.
+ */
+void chart_series_set_trendline(lxw_chart_series *series, uint8_t type,
+                                uint8_t value);
+
+/**
+ * @brief Set the trendline forecast for a chart data series.
+ *
+ * @param series   A series object created via `chart_add_series()`.
+ * @param forward  The forward period.
+ * @param backward The backwards period.
+ *
+ * The `%chart_series_set_trendline_forecast()` function sets the forward
+ * and backward forecast periods for the trendline:
+ *
+ * @code
+ *     chart_series_set_trendline(series, LXW_CHART_TRENDLINE_TYPE_LINEAR, 0);
+ *     chart_series_set_trendline_forecast(series, 0.5, 0.5);
+ * @endcode
+ *
+ * @image html chart_trendline4.png
+ *
+ * @note This feature isn't available for Moving Average in Excel.
+ *
+ * For more information see @ref chart_trendlines.
+ */
+void chart_series_set_trendline_forecast(lxw_chart_series *series,
+                                         double forward, double backward);
+
+/**
+ * @brief Display the equation of a trendline for a chart data series.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ *
+ * The `%chart_series_set_trendline_equation()` function displays the
+ * equation of the trendline on the chart:
+ *
+ * @code
+ *     chart_series_set_trendline(series, LXW_CHART_TRENDLINE_TYPE_LINEAR, 0);
+ *     chart_series_set_trendline_equation(series);
+ * @endcode
+ *
+ * @image html chart_trendline5.png
+ *
+ * @note This feature isn't available for Moving Average in Excel.
+ *
+ * For more information see @ref chart_trendlines.
+ */
+void chart_series_set_trendline_equation(lxw_chart_series *series);
+
+/**
+ * @brief Display the R squared value of a trendline for a chart data series.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ *
+ * The `%chart_series_set_trendline_r_squared()` function displays the
+ * R-squared value for the trendline on the chart:
+ *
+ * @code
+ *     chart_series_set_trendline(series, LXW_CHART_TRENDLINE_TYPE_LINEAR, 0);
+ *     chart_series_set_trendline_r_squared(series);
+ * @endcode
+ *
+ * @image html chart_trendline6.png
+ *
+ * @note This feature isn't available for Moving Average in Excel.
+ *
+ * For more information see @ref chart_trendlines.
+ */
+void chart_series_set_trendline_r_squared(lxw_chart_series *series);
+
+/**
+ * @brief Set the trendline Y-axis intercept for a chart data series.
+ *
+ * @param series    A series object created via `chart_add_series()`.
+ * @param intercept Y-axis intercept value.
+ *
+ * The `%chart_series_set_trendline_intercept()` function sets the Y-axis
+ * intercept for the trendline:
+ *
+ * @code
+ *     chart_series_set_trendline(series, LXW_CHART_TRENDLINE_TYPE_LINEAR, 0);
+ *     chart_series_set_trendline_equation(series);
+ *     chart_series_set_trendline_intercept(series, 0.8);
+ * @endcode
+ *
+ * @image html chart_trendline7.png
+ *
+ * As can be seen from the equation on the chart the intercept point
+ * (when X=0) is the same as the value set in the equation.
+ *
+ * @note The intercept feature is only available in Excel for Exponential,
+ *       Linear and Polynomial trendline types.
+ *
+ * For more information see @ref chart_trendlines.
+ */
+void chart_series_set_trendline_intercept(lxw_chart_series *series,
+                                          double intercept);
+
+/**
+ * @brief Set the trendline name for a chart data series.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ * @param name   The name of the trendline to display in the legend.
+ *
+ * The `%chart_series_set_trendline_name()` function sets the name of the
+ * trendline that is displayed in the chart legend. In the examples above
+ * the trendlines are displayed with default names like "Linear (Series 1)"
+ * and "2 per Mov. Avg. (Series 1)". If these names are too verbose or not
+ * descriptive enough you can set your own trendline name:
+ *
+ * @code
+ *     chart_series_set_trendline(series, LXW_CHART_TRENDLINE_TYPE_LINEAR, 0);
+ *     chart_series_set_trendline_name(series, "My trendline");
+ * @endcode
+ *
+ * @image html chart_trendline8.png
+ *
+ * It is often preferable to turn off the trendline caption in the legend.
+ * This is down in Excel by deleting the trendline name from the legend.
+ * In libxlsxwriter this is done using the `chart_legend_delete_series()`
+ * function to delete the zero based series numbers:
+ *
+ * @code
+ *     chart_series_set_trendline(series, LXW_CHART_TRENDLINE_TYPE_LINEAR, 0);
+ *
+ *     // Delete the series name for the second series (=1 in zero base).
+ *     // The -1 value indicates the end of the array of values.
+ *     int16_t names[] = {1, -1};
+ *     chart_legend_delete_series(chart, names);
+ * @endcode
+ *
+ * @image html chart_trendline9.png
+ *
+ * For more information see @ref chart_trendlines.
+ */
+void chart_series_set_trendline_name(lxw_chart_series *series,
+                                     const char *name);
+
+/**
+ * @brief Set the trendline line properties for a chart data series.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ * @param line   A #lxw_chart_line struct.
+ *
+ * The `%chart_series_set_trendline_line()` function is used to set the line
+ * properties of a trendline:
+ *
+ * @code
+ *     lxw_chart_line line = {.color     = LXW_COLOR_RED,
+ *                            .dash_type = LXW_CHART_LINE_DASH_LONG_DASH};
+ *
+ *     chart_series_set_trendline(series, LXW_CHART_TRENDLINE_TYPE_LINEAR, 0);
+ *     chart_series_set_trendline_line(series, &line);
+ * @endcode
+ *
+ * @image html chart_trendline10.png
+ *
+ * For more information see @ref chart_trendlines and @ref chart_lines.
+ */
+void chart_series_set_trendline_line(lxw_chart_series *series,
+                                     lxw_chart_line *line);
+
+/**
+ * Set the X or Y error bars for a chart series.
+ *
+ * @param error_bars A pointer to the series X or Y error bars.
+ * @param type       The type of error bar: #lxw_chart_error_bar_type.
+ * @param value      The error value.
+ *
+ * Error bars can be added to a chart series to indicate error bounds in the
+ * data. The error bars can be vertical `y_error_bars` (the most common type)
+ * or horizontal `x_error_bars` (for Bar and Scatter charts only).
+ *
+ * @image html chart_error_bars0.png
+ *
+ * The `%chart_series_set_error_bars()` function sets the error bar type
+ * and value associated with the type:
+ *
+ * @code
+ *     lxw_chart_series *series = chart_add_series(chart,
+ *                                                 "=Sheet1!$A$1:$A$5",
+ *                                                 "=Sheet1!$B$1:$B$5");
+ *
+ *     chart_series_set_error_bars(series->y_error_bars,
+ *                                 LXW_CHART_ERROR_BAR_TYPE_STD_ERROR, 0);
+ * @endcode
+ *
+ * @image html chart_error_bars1.png
+ *
+ * The error bar types that be used are:
+ *
+ * - #LXW_CHART_ERROR_BAR_TYPE_STD_ERROR: Standard error.
+ * - #LXW_CHART_ERROR_BAR_TYPE_FIXED: Fixed value.
+ * - #LXW_CHART_ERROR_BAR_TYPE_PERCENTAGE: Percentage.
+ * - #LXW_CHART_ERROR_BAR_TYPE_STD_DEV: Standard deviation(s).
+ *
+ * @note Custom error bars are not currently supported.
+ *
+ * All error bar types, apart from Standard error, should have a valid
+ * value to set the error range:
+ *
+ * @code
+ *     chart_series_set_error_bars(series1->y_error_bars,
+ *                                 LXW_CHART_ERROR_BAR_TYPE_FIXED, 2);
+ *
+ *     chart_series_set_error_bars(series2->y_error_bars,
+ *                                 LXW_CHART_ERROR_BAR_TYPE_PERCENTAGE, 5);
+ *
+ *     chart_series_set_error_bars(series3->y_error_bars,
+ *                                 LXW_CHART_ERROR_BAR_TYPE_STD_DEV, 1);
+ * @endcode
+ *
+ * For the Standard error type the value is ignored.
+ *
+ * For more information see @ref chart_error_bars.
+ */
+void chart_series_set_error_bars(lxw_series_error_bars *error_bars,
+                                 uint8_t type, double value);
+
+/**
+ * @brief Set the direction (up, down or both) of the error bars for a chart
+ *        series.
+ *
+ * @param error_bars A pointer to the series X or Y error bars.
+ * @param direction  The bar direction: #lxw_chart_error_bar_direction .
+ *
+ * The `%chart_series_set_error_bars_direction()` function sets the
+ * direction of the error bars:
+ *
+ * @code
+ *     chart_series_set_error_bars(series->y_error_bars,
+ *                                 LXW_CHART_ERROR_BAR_TYPE_STD_ERROR, 0);
+ *
+ *     chart_series_set_error_bars_direction(series->y_error_bars,
+ *                                           LXW_CHART_ERROR_BAR_DIR_PLUS);
+ * @endcode
+ *
+ * @image html chart_error_bars2.png
+ *
+ * The valid directions are:
+ *
+ * - #LXW_CHART_ERROR_BAR_DIR_BOTH: Error bar extends in both directions.
+ *   The default.
+ * - #LXW_CHART_ERROR_BAR_DIR_PLUS: Error bar extends in positive direction.
+ * - #LXW_CHART_ERROR_BAR_DIR_MINUS: Error bar extends in negative direction.
+ *
+ * For more information see @ref chart_error_bars.
+ */
+void chart_series_set_error_bars_direction(lxw_series_error_bars *error_bars,
+                                           uint8_t direction);
+
+/**
+ * @brief Set the end cap type for the error bars of a chart series.
+ *
+ * @param error_bars A pointer to the series X or Y error bars.
+ * @param endcap     The error bar end cap type: #lxw_chart_error_bar_cap .
+ *
+ * The `%chart_series_set_error_bars_endcap()` function sets the end cap
+ * type for the error bars:
+ *
+ * @code
+ *     chart_series_set_error_bars(series->y_error_bars,
+ *                                 LXW_CHART_ERROR_BAR_TYPE_STD_ERROR, 0);
+ *
+ *     chart_series_set_error_bars_endcap(series->y_error_bars,
+                                          LXW_CHART_ERROR_BAR_NO_CAP);
+ * @endcode
+ *
+ * @image html chart_error_bars3.png
+ *
+ * The valid values are:
+ *
+ * - #LXW_CHART_ERROR_BAR_END_CAP: Flat end cap. The default.
+ * - #LXW_CHART_ERROR_BAR_NO_CAP: No end cap.
+ *
+ * For more information see @ref chart_error_bars.
+ */
+void chart_series_set_error_bars_endcap(lxw_series_error_bars *error_bars,
+                                        uint8_t endcap);
+
+/**
+ * @brief Set the line properties for a chart series error bars.
+ *
+ * @param error_bars A pointer to the series X or Y error bars.
+ * @param line       A #lxw_chart_line struct.
+ *
+ * The `%chart_series_set_error_bars_line()` function sets the line
+ * properties for the error bars:
+ *
+ * @code
+ *     lxw_chart_line line = {.color     = LXW_COLOR_RED,
+ *                            .dash_type = LXW_CHART_LINE_DASH_ROUND_DOT};
+ *
+ *     chart_series_set_error_bars(series->y_error_bars,
+ *                                 LXW_CHART_ERROR_BAR_TYPE_STD_ERROR, 0);
+ *
+ *     chart_series_set_error_bars_line(series->y_error_bars, &line);
+ * @endcode
+ *
+ * @image html chart_error_bars4.png
+ *
+ * For more information see @ref chart_lines and @ref chart_error_bars.
+ */
+void chart_series_set_error_bars_line(lxw_series_error_bars *error_bars,
+                                      lxw_chart_line *line);
+
+/**
  * @brief Set the name caption of the an axis.
  *
  * @param axis A pointer to a chart #lxw_chart_axis object.
@@ -1370,6 +2257,30 @@ void chart_axis_set_name_font(lxw_chart_axis *axis, lxw_chart_font *font);
  *                 See @ref ww_charts_axes.
  */
 void chart_axis_set_num_font(lxw_chart_axis *axis, lxw_chart_font *font);
+
+/**
+ * @brief Set the number format for a chart axis.
+ *
+ * @param axis       A pointer to a chart #lxw_chart_axis object.
+ * @param num_format The number format string.
+ *
+ * The `%chart_axis_set_num_format()` function is used to set the format of
+ * the numbers on an axis:
+ *
+ * @code
+ *     chart_axis_set_num_format(chart->x_axis, "0.00%");
+ *     chart_axis_set_num_format(chart->y_axis, "$#,##0.00");
+ * @endcode
+ *
+ * The number format is similar to the Worksheet Cell Format num_format,
+ * see `format_set_num_format()`.
+ *
+ * @image html chart_axis_num_format.png
+ *
+ * **Axis types**: This function is applicable to to all axes types.
+ *                 See @ref ww_charts_axes.
+ */
+void chart_axis_set_num_format(lxw_chart_axis *axis, const char *num_format);
 
 /**
  * @brief Set the line properties for a chart axis.
@@ -2244,11 +3155,306 @@ void chart_plotarea_set_pattern(lxw_chart *chart, lxw_chart_pattern *pattern);
  * to the base chart type. They can not be defined by the `chart_set_style()``
  * function.
  *
- *
  */
 void chart_set_style(lxw_chart *chart, uint8_t style_id);
 
+/**
+ * @brief Turn on a data table below the horizontal axis.
+ *
+ * @param chart Pointer to a lxw_chart instance to be configured.
+ *
+ * The `%chart_set_table()` function adds a data table below the horizontal
+ * axis with the data used to plot the chart:
+ *
+ * @code
+ *     // Turn on the data table with default options.
+ *     chart_set_table(chart);
+ * @endcode
+ *
+ * @image html chart_data_table1.png
+ *
+ * The data table can only be shown with Bar, Column, Line and Area charts.
+ *
+ */
+void chart_set_table(lxw_chart *chart);
+
+/**
+ * @brief Turn on/off grid options for a chart data table.
+ *
+ * @param chart       Pointer to a lxw_chart instance to be configured.
+ * @param horizontal  Turn on/off the horizontal grid lines in the table.
+ * @param vertical    Turn on/off the vertical grid lines in the table.
+ * @param outline     Turn on/off the outline lines in the table.
+ * @param legend_keys Turn on/off the legend keys in the table.
+ *
+ * The `%chart_set_table_grid()` function turns on/off grid options for a
+ * chart data table. The data table grid options in Excel are shown in the
+ * dialog below:
+ *
+ * @image html chart_data_table3.png
+ *
+ * These options can be passed to the `%chart_set_table_grid()` function.
+ * The values for a default chart are:
+ *
+ * - `horizontal`: On.
+ * - `vertical`: On.
+ * - `outline`:  On.
+ * - `legend_keys`: Off.
+ *
+ * Example:
+ *
+ * @code
+ *     // Turn on the data table with default options.
+ *     chart_set_table(chart);
+ *
+ *     // Turn on all grid lines and the grid legend.
+ *     chart_set_table_grid(chart, LXW_TRUE, LXW_TRUE, LXW_TRUE, LXW_TRUE);
+ *
+ *     // Turn off the legend since it is show in the table.
+ *     chart_legend_set_position(chart, LXW_CHART_LEGEND_NONE);
+ *
+ * @endcode
+ *
+ * @image html chart_data_table2.png
+ *
+ * The data table can only be shown with Bar, Column, Line and Area charts.
+ *
+ */
+void chart_set_table_grid(lxw_chart *chart, uint8_t horizontal,
+                          uint8_t vertical, uint8_t outline,
+                          uint8_t legend_keys);
+
+void chart_set_table_font(lxw_chart *chart, lxw_chart_font *font);
+
+/**
+ * @brief Turn on up-down bars for the chart.
+ *
+ * @param chart Pointer to a lxw_chart instance to be configured.
+ *
+ * The `%chart_set_up_down_bars()` function adds Up-Down bars to Line charts
+ * to indicate the difference between the first and last data series:
+ *
+ * @code
+ *     chart_set_up_down_bars(chart);
+ * @endcode
+ *
+ * @image html chart_data_tools4.png
+ *
+ * Up-Down bars are only available in Line charts. By default Up-Down bars are
+ * black and white like in the above example. To format the border or fill
+ * of the bars see the `chart_set_up_down_bars_format()` function below.
+ */
+void chart_set_up_down_bars(lxw_chart *chart);
+
+/**
+ * @brief Turn on up-down bars for the chart, with formatting.
+ *
+ * @param chart         Pointer to a lxw_chart instance to be configured.
+ * @param up_bar_line   A #lxw_chart_line struct for the up-bar border.
+ * @param up_bar_fill   A #lxw_chart_fill struct for the up-bar fill.
+ * @param down_bar_line A #lxw_chart_line struct for the down-bar border.
+ * @param down_bar_fill A #lxw_chart_fill struct for the down-bar fill.
+ *
+ * The `%chart_set_up_down_bars_format()` function adds Up-Down bars to Line
+ * charts to indicate the difference between the first and last data series.
+ * It also allows the up and down bars to be formatted:
+ *
+ * @code
+ *     lxw_chart_line line      = {.color = LXW_COLOR_BLACK};
+ *     lxw_chart_fill up_fill   = {.color = 0x00B050};
+ *     lxw_chart_fill down_fill = {.color = LXW_COLOR_RED};
+ *
+ *     chart_set_up_down_bars_format(chart, &line, &up_fill, &line, &down_fill);
+ * @endcode
+ *
+ * @image html chart_up_down_bars.png
+ *
+ * Up-Down bars are only available in Line charts.
+ * For more format information  see @ref chart_lines and @ref chart_fills.
+ */
+void chart_set_up_down_bars_format(lxw_chart *chart,
+                                   lxw_chart_line *up_bar_line,
+                                   lxw_chart_fill *up_bar_fill,
+                                   lxw_chart_line *down_bar_line,
+                                   lxw_chart_fill *down_bar_fill);
+
+/**
+ * @brief Turn on and format Drop Lines for a chart.
+ *
+ * @param chart Pointer to a lxw_chart instance to be configured.
+ * @param line  A #lxw_chart_line struct.
+ *
+ * The `%chart_set_drop_lines()` function adds Drop Lines to charts to
+ * show the Category value of points in the data:
+ *
+ * @code
+ *     chart_set_drop_lines(chart, NULL);
+ * @endcode
+ *
+ * @image html chart_data_tools6.png
+ *
+ * It is possible to format the Drop Line line properties if required:
+ *
+ * @code
+ *     lxw_chart_line line = {.color     = LXW_COLOR_RED,
+ *                            .dash_type = LXW_CHART_LINE_DASH_SQUARE_DOT};
+ *
+ *     chart_set_drop_lines(chart, &line);
+ * @endcode
+ *
+ * Drop Lines are only available in Line and Area charts.
+ * For more format information see @ref chart_lines.
+ */
+void chart_set_drop_lines(lxw_chart *chart, lxw_chart_line *line);
+
+/**
+ * @brief Turn on and format high-low Lines for a chart.
+ *
+ * @param chart Pointer to a lxw_chart instance to be configured.
+ * @param line  A #lxw_chart_line struct.
+ *
+ * The `%chart_set_high_low_lines()` function adds High-Low Lines to charts
+ * to show the Category value of points in the data:
+ *
+ * @code
+ *     chart_set_high_low_lines(chart, NULL);
+ * @endcode
+ *
+ * @image html chart_data_tools5.png
+ *
+ * It is possible to format the High-Low Line line properties if required:
+ *
+ * @code
+ *     lxw_chart_line line = {.color     = LXW_COLOR_RED,
+ *                            .dash_type = LXW_CHART_LINE_DASH_SQUARE_DOT};
+ *
+ *     chart_set_high_low_lines(chart, &line);
+ * @endcode
+ *
+ * High-Low Lines are only available in Line charts.
+ * For more format information see @ref chart_lines.
+ */
+void chart_set_high_low_lines(lxw_chart *chart, lxw_chart_line *line);
+
+/**
+ * @brief Set the overlap between series in a Bar/Column chart.
+ *
+ * @param chart   Pointer to a lxw_chart instance to be configured.
+ * @param overlap The overlap between the series. -100 to 100.
+ *
+ * The `%chart_set_series_overlap()` function sets the overlap between series
+ * in Bar and Column charts.
+ *
+ * @code
+ *     chart_set_series_overlap(chart, -50);
+ * @endcode
+ *
+ * @image html chart_overlap.png
+ *
+ * The overlap value must be in the range `0 <= overlap <= 500`.
+ * The default value is 0.
+ *
+ * This option is only available for Bar/Column charts.
+ */
+void chart_set_series_overlap(lxw_chart *chart, int8_t overlap);
+
+/**
+ * @brief Set the gap between series in a Bar/Column chart.
+ *
+ * @param chart Pointer to a lxw_chart instance to be configured.
+ * @param gap   The gap between the series.  0 to 500.
+ *
+ * The `%chart_set_series_gap()` function sets the gap between series in
+ * Bar and Column charts.
+ *
+ * @code
+ *     chart_set_series_gap(chart, 400);
+ * @endcode
+ *
+ * @image html chart_gap.png
+ *
+ * The gap value must be in the range `0 <= gap <= 500`. The default value
+ * is 150.
+ *
+ * This option is only available for Bar/Column charts.
+ */
+void chart_set_series_gap(lxw_chart *chart, uint16_t gap);
+
+/**
+ * @brief Set the option for displaying blank data in a chart.
+ *
+ * @param chart    Pointer to a lxw_chart instance to be configured.
+ * @param option The display option. A #lxw_chart_blank option.
+ *
+ * The `%chart_show_blanks_as()` function controls how blank data is displayed
+ * in a chart:
+ *
+ * @code
+ *     chart_show_blanks_as(chart, LXW_CHART_BLANKS_AS_CONNECTED);
+ * @endcode
+ *
+ * The `option` parameter can have one of the following values:
+ *
+ * - #LXW_CHART_BLANKS_AS_GAP: Show empty chart cells as gaps in the data.
+ *   This is the default option for Excel charts.
+ * - #LXW_CHART_BLANKS_AS_ZERO: Show empty chart cells as zeros.
+ * - #LXW_CHART_BLANKS_AS_CONNECTED: Show empty chart cells as connected.
+ *   Only for charts with lines.
+ */
+void chart_show_blanks_as(lxw_chart *chart, uint8_t option);
+
+/**
+ * @brief Display data on charts from hidden rows or columns.
+ *
+ * @param chart Pointer to a lxw_chart instance to be configured.
+ *
+ * Display data that is in hidden rows or columns on the chart:
+ *
+ * @code
+ *     chart_show_hidden_data(chart);
+ * @endcode
+ */
+void chart_show_hidden_data(lxw_chart *chart);
+
+/**
+ * @brief Set the Pie/Doughnut chart rotation.
+ *
+ * @param chart    Pointer to a lxw_chart instance to be configured.
+ * @param rotation The angle of rotation.
+ *
+ * The `chart_set_rotation()` function is used to set the rotation of the
+ * first segment of a Pie/Doughnut chart. This has the effect of rotating
+ * the entire chart:
+ *
+ * @code
+ *     chart_set_rotation(chart, 28);
+ * @endcode
+ *
+ * The angle of rotation must be in the range `0 <= rotation <= 360`.
+ *
+ * This option is only available for Pie/Doughnut charts.
+ *
+ */
 void chart_set_rotation(lxw_chart *chart, uint16_t rotation);
+
+/**
+ * @brief Set the Doughnut chart hole size.
+ *
+ * @param chart Pointer to a lxw_chart instance to be configured.
+ * @param size  The hole size as a percentage.
+ *
+ * The `chart_set_hole_size()` function is used to set the hole size of a
+ * Doughnut chart:
+ *
+ * @code
+ *     chart_set_hole_size(chart, 33);
+ * @endcode
+ *
+ * The hole size must be in the range `10 <= size <= 90`.
+ *
+ * This option is only available for Doughnut charts.
+ *
+ */
 void chart_set_hole_size(lxw_chart *chart, uint8_t size);
 
 lxw_error lxw_chart_add_data_cache(lxw_series_range *range, uint8_t *data,

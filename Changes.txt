@@ -2,6 +2,101 @@
 @page changes Changes
 
 
+## 0.7.2 July 26 2017
+
+- Changed font sizes from integer to double to allow fractional font sizes.
+  Issue [#114][gh_114].
+
+  [gh_114]: https://github.com/jmcnamara/libxlsxwriter/issues/114
+
+
+## 0.7.1 July 24 2017
+
+- Fixed issue where internal file creation and modification dates were in the
+  local timezone instead of UTC.
+  Issue [#110][gh_110].
+
+  [gh_110]: https://github.com/jmcnamara/libxlsxwriter/issues/110
+
+
+## 0.7.0 June 26 2017
+
+- Added support for CMake build system. See @ref gsg_cmake.
+  Thanks to Alex Huszagh.
+
+- Fixed issue where image filehandles weren't closed until the overall file
+  was closed causing the system to run out of filehandles.
+  Issue [#106][gh_106].
+
+  [gh_106]: https://github.com/jmcnamara/libxlsxwriter/issues/106
+
+## 0.6.9 January 30 2017
+
+- Added chart trendlines. See @ref chart_trendlines and
+  @ref chart_data_tools.c.
+
+
+## 0.6.8 January 28 2017
+
+- Added chart error bars. See @ref chart_error_bars and
+  @ref chart_data_tools.c.
+
+## 0.6.7 January 24 2017
+
+- Added chart data labels. See @ref chart_labels.
+
+
+## 0.6.6 January 22 2017
+
+- Added functions to set chart Up-Down bars: see `chart_set_up_down_bars()`
+  and `chart_set_up_down_bars_format()` and @ref chart_data_tools.c.
+
+- Added functions to handle blank and hidden data in charts: see
+  `chart_show_blanks_as()` and `chart_show_hidden_data()`.
+
+
+## 0.6.5 January 21 2017
+
+- Added functions to set the overlap and gap between series: see
+  `chart_set_series_overlap()` and `chart_set_series_gap()`.
+
+
+## 0.6.4 January 20 2017
+
+- Added chart data table option, see `chart_set_table()` and
+  `chart_set_table_grid()`.
+
+- Added Clustered Chart example, see @ref chart_clustered.c.
+
+
+## 0.6.3 January 19 2017
+
+- Added `chart_set_drop_lines()` and `chart_set_high_low_lines()` functions to
+  add chart Drop and High-Low lines to indicate category values.
+  See @ref chart_data_tools.c.
+
+
+## 0.6.2 January 17 2017
+
+- Added `chart_series_set_smooth()` function to set the line smoothing
+  property of a line or scatter chart series.
+
+
+## 0.6.1 January 16 2017
+
+- Added option to set formatting for points in a chart. This allow the colors
+  of Pie chart segments to be defined. See @ref chart_points.
+
+
+## 0.6.0 January 15 2017
+
+- Added option to set the number format for a chart axis, see
+  `chart_axis_set_num_format()`.
+
+- Added "invert if negative" option for series fills, see
+  `chart_series_set_invert_if_negative()`.
+
+
 ## 0.5.9 January 14 2017
 
 - Added support for chart axis crossing. See `chart_axis_set_crossing()` and
