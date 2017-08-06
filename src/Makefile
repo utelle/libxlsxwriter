@@ -100,7 +100,7 @@ test_lib : libxlsxwriter_test.a
 
 # The static library.
 $(LIBXLSXWRITER_A) : $(OBJS)
-	$(Q)$(AR) $(ARFLAGS) $@ $(EMYG_DIR)/emyg_dtoa.c $(MINIZIP_DIR)/ioapi.o  $(MINIZIP_DIR)/zip.o $(TMPFILEPLUS_OBJ) $^
+	$(Q)$(AR) $(ARFLAGS) $@ $(EMYG_DIR)/emyg_dtoa.o $(MINIZIP_DIR)/ioapi.o  $(MINIZIP_DIR)/zip.o $(TMPFILEPLUS_OBJ) $^
 
 # The dynamic library.
 ifeq ($(findstring m32,$(CFLAGS)),m32)
@@ -108,11 +108,11 @@ ARCH = -m32
 endif
 
 $(LIBXLSXWRITER_SO) : $(SOBJS)
-	$(Q)$(CC) $(SOFLAGS) $(ARCH) -o $@ $(EMYG_DIR)/emyg_dtoa.c $(MINIZIP_DIR)/ioapi.so $(MINIZIP_DIR)/zip.so $(TMPFILEPLUS_SO) $^ -lz
+	$(Q)$(CC) $(SOFLAGS) $(ARCH) -o $@ $(EMYG_DIR)/emyg_dtoa.so $(MINIZIP_DIR)/ioapi.so $(MINIZIP_DIR)/zip.so $(TMPFILEPLUS_SO) $^ -lz
 
 # The test library.
 $(LIBXLSXWRITER_TO) : $(TOBJS)
-	$(Q)$(AR) $(ARFLAGS) $@ $(EMYG_DIR)/emyg_dtoa.c $(MINIZIP_DIR)/ioapi.o  $(MINIZIP_DIR)/zip.o  $(TMPFILEPLUS_OBJ) $^
+	$(Q)$(AR) $(ARFLAGS) $@ $(EMYG_DIR)/emyg_dtoa.o $(MINIZIP_DIR)/ioapi.o  $(MINIZIP_DIR)/zip.o  $(TMPFILEPLUS_OBJ) $^
 
 # Minimal target for quick compile without creating the libs.
 test_compile : $(OBJS)
