@@ -28,6 +28,7 @@ LIBS = $(LIBXLSXWRITER) -lz
 all : $(LIBXLSXWRITER) $(EXES)
 
 $(LIBXLSXWRITER):
+	$(Q)$(MAKE) -C ../third_party/emyg
 	$(Q)$(MAKE) -C ../third_party/minizip
 	$(Q)$(MAKE) -C ../third_party/tmpfileplus
 ifndef USE_STANDARD_TMPFILE
