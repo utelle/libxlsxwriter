@@ -17,6 +17,7 @@ INSTALL_DIR ?= /usr/local
 
 # Build the libs.
 all :
+	$(Q)$(MAKE) -C third_party/emyg
 	$(Q)$(MAKE) -C third_party/minizip
 ifndef USE_STANDARD_TMPFILE
 	$(Q)$(MAKE) -C third_party/tmpfileplus
@@ -33,6 +34,7 @@ clean :
 	$(Q)$(MAKE) clean -C test/unit
 	$(Q)$(MAKE) clean -C test/functional/src
 	$(Q)$(MAKE) clean -C examples
+	$(Q)$(MAKE) clean -C third_party/emyg
 	$(Q)$(MAKE) clean -C third_party/minizip
 	$(Q)rm -rf docs/html
 	$(Q)rm -rf test/functional/__pycache__
@@ -59,6 +61,7 @@ test_functional : all
 # Run all tests.
 test_unit :
 	@echo "Compiling unit tests ..."
+	$(Q)$(MAKE) -C third_party/emyg
 	$(Q)$(MAKE) -C third_party/minizip
 ifndef USE_STANDARD_TMPFILE
 	$(Q)$(MAKE) -C third_party/tmpfileplus
@@ -106,6 +109,7 @@ strip:
 
 # Run a coverity static analysis.
 coverity:
+	$(Q)$(MAKE) -C third_party/emyg
 	$(Q)$(MAKE) -C third_party/minizip
 ifndef USE_STANDARD_TMPFILE
 	$(Q)$(MAKE) -C third_party/tmpfileplus
@@ -121,6 +125,7 @@ endif
 
 # Run a scan-build static analysis.
 scan_build:
+	$(Q)$(MAKE) -C third_party/emyg
 	$(Q)$(MAKE) -C third_party/minizip
 ifndef USE_STANDARD_TMPFILE
 	$(Q)$(MAKE) -C third_party/tmpfileplus
