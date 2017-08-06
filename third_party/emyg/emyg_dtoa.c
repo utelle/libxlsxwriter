@@ -94,16 +94,16 @@ static __inline DiyFp DiyFp_multiply(const DiyFp lhs, const DiyFp rhs) {
 #if defined(_MSC_VER) && defined(_M_AMD64)
 	uint64_t h;
 	uint64_t l = _umul128(lhs.f, rhs.f, &h);
-	if (l & (uint64_t(1) << 63)) // rounding
+	if (l & (((uint64_t)1) << 63)) // rounding
 		h++;
-	return DiyFp_fro_parts(h, e + rhs.e + 64);
+	return DiyFp_fro_parts(h, lhs.e + rhs.e + 64);
 #elif (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)) && defined(__x86_64__)
 	unsigned __int128 p = (unsigned __int128 )(lhs.f) * (unsigned __int128 )(rhs.f);
 	uint64_t h = p >> 64;
 	uint64_t l = (uint64_t )(p);
-	if (l & (uint64_t(1) << 63)) // rounding
+	if (l & (((uint64_t)1) << 63)) // rounding
 		h++;
-	return DiyFp_from_parts(h, e + rhs.e + 64);
+	return DiyFp_from_parts(h, lhs.e + rhs.e + 64);
 #else
 	const uint64_t M32 = 0xFFFFFFFF;
 	const uint64_t a = lhs.f >> 32;
