@@ -152,6 +152,8 @@ void lxw_str_tolower(char *str);
 
 FILE *lxw_tmpfile(char *tmpdir);
 
+char* lxw_print_double(char* buffer, size_t buffer_size, double number);
+
 /* Declarations required for unit testing. */
 #ifdef TESTING
 

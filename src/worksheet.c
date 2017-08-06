@@ -2385,13 +2385,14 @@ STATIC void
 _write_number_cell(lxw_worksheet *self, char *range,
                    int32_t style_index, lxw_cell *cell)
 {
+    char buffer[LXW_MAX_ATTRIBUTE_LENGTH];
     if (style_index)
         fprintf(self->file,
-                "<c r=\"%s\" s=\"%d\"><v>%.16g</v></c>",
-                range, style_index, cell->u.number);
+                "<c r=\"%s\" s=\"%d\"><v>%s</v></c>",
+                range, style_index, lxw_print_double(buffer, LXW_MAX_ATTRIBUTE_LENGTH, cell->u.number));
     else
         fprintf(self->file,
-                "<c r=\"%s\"><v>%.16g</v></c>", range, cell->u.number);
+                "<c r=\"%s\"><v>%s</v></c>", range, lxw_print_double(buffer, LXW_MAX_ATTRIBUTE_LENGTH, cell->u.number));
 }
 
 /*
@@ -2459,7 +2460,7 @@ _write_formula_num_cell(lxw_worksheet *self, lxw_cell *cell)
 {
     char data[LXW_ATTR_32];
 
-    lxw_snprintf(data, LXW_ATTR_32, "%.16g", cell->formula_result);
+    lxw_print_double(data, LXW_ATTR_32, cell->formula_result);
 
     lxw_xml_data_element(self->file, "f", cell->u.string, NULL);
     lxw_xml_data_element(self->file, "v", data, NULL);
@@ -2479,7 +2480,7 @@ _write_array_formula_num_cell(lxw_worksheet *self, lxw_cell *cell)
     LXW_PUSH_ATTRIBUTES_STR("t", "array");
     LXW_PUSH_ATTRIBUTES_STR("ref", cell->user_data1);
 
-    lxw_snprintf(data, LXW_ATTR_32, "%.16g", cell->formula_result);
+    lxw_print_double(data, LXW_ATTR_32, cell->formula_result);
 
     lxw_xml_data_element(self->file, "f", cell->u.string, &attributes);
     lxw_xml_data_element(self->file, "v", data, NULL);

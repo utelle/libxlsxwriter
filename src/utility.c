@@ -513,3 +513,15 @@ lxw_tmpfile(char *tmpdir)
     return tmpfile();
 #endif
 }
+
+#include "../third_party/emyg/emyg_dtoa.h"
+
+char*
+lxw_print_double(char* buffer, size_t buffer_size, double number)
+{
+  char localBuffer[256];
+  emyg_dtoa(number, localBuffer);
+  strncpy(buffer, localBuffer, buffer_size);
+  buffer[buffer_size-1] = 0;
+  return buffer;
+}

@@ -120,7 +120,7 @@ add_definitions(-DNOCRYPT -DNOUNCRYPT)
 
 include_directories(include include/xlsxwriter)
 file(GLOB LXW_SOURCES src/*.c)
-list(APPEND LXW_SOURCES third_party/minizip/ioapi.c third_party/minizip/zip.c)
+list(APPEND LXW_SOURCES third_party/emyg/emyg_dtoa.c third_party/minizip/ioapi.c third_party/minizip/zip.c)
 if(MSVC)
     list(APPEND LXW_SOURCES third_party/minizip/iowin32.c)
 endif()

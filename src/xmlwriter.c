@@ -11,6 +11,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "xlsxwriter/xmlwriter.h"
+#include "xlsxwriter/utility.h"
 
 #define LXW_AMP  "&amp;"
 #define LXW_LT   "&lt;"
@@ -349,7 +350,7 @@ lxw_new_attribute_dbl(const char *key, double value)
     struct xml_attribute *attribute = malloc(sizeof(struct xml_attribute));
 
     LXW_ATTRIBUTE_COPY(attribute->key, key);
-    lxw_snprintf(attribute->value, LXW_MAX_ATTRIBUTE_LENGTH, "%.16g", value);
+    lxw_print_double(attribute->value, LXW_MAX_ATTRIBUTE_LENGTH, value);
 
     return attribute;
 }
