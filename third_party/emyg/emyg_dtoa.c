@@ -390,9 +390,12 @@ static __inline void Prettify(char* buffer, int length, int k) {
 		// 1234e7 -> 12340000000
 		for (i = length; i < kk; i++)
 			buffer[i] = '0';
+		buffer[kk] = '\0';
+#if 0
 		buffer[kk] = '.';
 		buffer[kk + 1] = '0';
 		buffer[kk + 2] = '\0';
+#endif
 	}
 	else if (0 < kk && kk <= 21) {
 		// 1234e-2 -> 12.34
