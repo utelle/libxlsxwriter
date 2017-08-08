@@ -440,9 +440,12 @@ void emyg_dtoa (double value, char* buffer) {
 
 	if (value == 0) {
 		buffer[0] = '0';
+		buffer[1] = '\0';
+#if 0
 		buffer[1] = '.';
 		buffer[2] = '0';
 		buffer[3] = '\0';
+#endif
 	}
 	else {
     int length, K;
