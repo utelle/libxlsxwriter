@@ -2,7 +2,7 @@
 #
 # Makefile for libxlsxwriter functional test executables.
 #
-# Copyright 2014-2017, John McNamara, jmcnamara@cpan.org
+# Copyright 2014-2018, John McNamara, jmcnamara@cpan.org
 #
 
 # Keep the output quiet by default.
@@ -24,12 +24,18 @@ EXES = $(patsubst %.c,%,$(SRCS))
 LIBXLSXWRITER = ../../../src/libxlsxwriter.a
 
 LIBS = $(LIBXLSXWRITER) -lz
+ifdef USE_SYSTEM_MINIZIP
+LIBS   += -lminizip
+CFLAGS += -DUSE_SYSTEM_MINIZIP
+endif
 
 all : $(LIBXLSXWRITER) $(EXES)
 
 $(LIBXLSXWRITER):
 	$(Q)$(MAKE) -C ../../../third_party/emyg
+ifndef USE_SYSTEM_MINIZIP
 	$(Q)$(MAKE) -C ../../../third_party/minizip
+endif
 	$(Q)$(MAKE) -C ../../../src
 
 clean :
@@ -42,4 +48,3 @@ clean :
 
 test_valgrind: all
 	$(Q)$(foreach exe,$(EXES),valgrind -q --error-exitcode=1 --leak-check=full ./$(exe) || exit;)
-

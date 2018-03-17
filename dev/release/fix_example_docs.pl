@@ -4,7 +4,7 @@
 # Simple program to arrange the example programs in a user defined order
 # instead or sorted order. Also add a caption.
 #
-# Copyright 2014-2017, John McNamara, jmcnamara@cpan.org
+# Copyright 2014-2018, John McNamara, jmcnamara@cpan.org
 #
 use warnings;
 use strict;
@@ -28,9 +28,12 @@ my @examples = (
     [ 'constant_memory.c',      'Write a large file with constant memory usage' ],
     [ 'merge_range.c',          'Create a merged range of cells' ],
     [ 'autofilter.c',           'An example of a worksheet autofilter' ],
+    [ 'data_validate.c',        'Examples of worksheet data validation and drop down lists' ],
     [ 'images.c',               'Example of adding images to a worksheet.' ],
     [ 'headers_footers.c',      'Example of adding worksheet headers/footers' ],
     [ 'defined_name.c',         'Example of how to create defined names' ],
+    [ 'outline.c',              'Example of grouping and outlines' ],
+    [ 'outline_collapsed.c',    'Example of grouping and collapsed outlines' ],
     [ 'tab_colors.c',           'Example of how to set worksheet tab colors' ],
     [ 'hide_sheet.c',           'Example of hiding a worksheet' ],
     [ 'doc_properties.c',       'Example of setting workbook doc properties' ],

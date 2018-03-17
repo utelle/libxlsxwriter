@@ -2,7 +2,7 @@
 #
 # Makefile for libxlsxwriter library.
 #
-# Copyright 2014-2017, John McNamara, jmcnamara@cpan.org
+# Copyright 2014-2018, John McNamara, jmcnamara@cpan.org
 #
 
 # Keep the output quiet by default.
@@ -18,7 +18,9 @@ INSTALL_DIR ?= /usr/local
 # Build the libs.
 all :
 	$(Q)$(MAKE) -C third_party/emyg
+ifndef USE_SYSTEM_MINIZIP
 	$(Q)$(MAKE) -C third_party/minizip
+endif
 ifndef USE_STANDARD_TMPFILE
 	$(Q)$(MAKE) -C third_party/tmpfileplus
 endif
@@ -35,11 +37,13 @@ clean :
 	$(Q)$(MAKE) clean -C test/functional/src
 	$(Q)$(MAKE) clean -C examples
 	$(Q)$(MAKE) clean -C third_party/emyg
-	$(Q)$(MAKE) clean -C third_party/minizip
 	$(Q)rm -rf docs/html
 	$(Q)rm -rf test/functional/__pycache__
 	$(Q)rm -f  test/functional/*.pyc
 	$(Q)rm -f  lib/*
+ifndef USE_SYSTEM_MINIZIP
+	$(Q)$(MAKE) clean -C third_party/minizip
+endif
 ifndef USE_STANDARD_TMPFILE
 	$(Q)$(MAKE) clean -C third_party/tmpfileplus
 endif
@@ -62,7 +66,9 @@ test_functional : all
 test_unit :
 	@echo "Compiling unit tests ..."
 	$(Q)$(MAKE) -C third_party/emyg
+ifndef USE_SYSTEM_MINIZIP
 	$(Q)$(MAKE) -C third_party/minizip
+endif
 ifndef USE_STANDARD_TMPFILE
 	$(Q)$(MAKE) -C third_party/tmpfileplus
 endif
@@ -94,14 +100,16 @@ docs:
 	$(Q)$(MAKE) -C docs
 
 # Simple minded install.
-install:
+install: all
+	$(Q)mkdir -p        $(INSTALL_DIR)/include
 	$(Q)cp -R include/* $(INSTALL_DIR)/include
-	$(Q)cp lib/* $(INSTALL_DIR)/lib
+	$(Q)mkdir -p        $(INSTALL_DIR)/lib
+	$(Q)cp lib/*        $(INSTALL_DIR)/lib
 
 # Simpler minded uninstall.
 uninstall:
 	$(Q)rm -rf $(INSTALL_DIR)/include/xlsxwriter*
-	$(Q)rm $(INSTALL_DIR)/lib/libxlsxwriter.*
+	$(Q)rm     $(INSTALL_DIR)/lib/libxlsxwriter.*
 
 # Strip the lib files.
 strip:
@@ -110,7 +118,9 @@ strip:
 # Run a coverity static analysis.
 coverity:
 	$(Q)$(MAKE) -C third_party/emyg
+ifndef USE_SYSTEM_MINIZIP
 	$(Q)$(MAKE) -C third_party/minizip
+endif
 ifndef USE_STANDARD_TMPFILE
 	$(Q)$(MAKE) -C third_party/tmpfileplus
 endif
@@ -126,7 +136,9 @@ endif
 # Run a scan-build static analysis.
 scan_build:
 	$(Q)$(MAKE) -C third_party/emyg
+ifndef USE_SYSTEM_MINIZIP
 	$(Q)$(MAKE) -C third_party/minizip
+endif
 ifndef USE_STANDARD_TMPFILE
 	$(Q)$(MAKE) -C third_party/tmpfileplus
 endif

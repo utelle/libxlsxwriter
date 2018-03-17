@@ -126,6 +126,13 @@ Example of adding an autofilter to a worksheet.
 @image html autofilter.png
 
 ##############################################################
+@example data_validate.c
+
+Example of adding data validations to a worksheet.
+
+@image html data_validate4.png
+
+##############################################################
 @example images.c
 
 Example of adding images to a worksheet.
@@ -148,6 +155,21 @@ Defined names are used to define descriptive names to represent a value, a
 single cell or a range of cells in a workbook or worksheet.
 
 @image html defined_name.png
+
+##############################################################
+@example outline.c
+
+Example of how to generate Excel outlines and grouping.
+
+@image html outline1.png
+
+##############################################################
+@example outline_collapsed.c
+
+Example of how to generate Excel outlines and grouping. These examples focus
+mainly on collapsed outlines.
+
+@image html outline2.png
 
 ##############################################################
 @example tab_colors.c

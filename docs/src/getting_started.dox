@@ -108,7 +108,7 @@ dynamic/shared library and header files.
 The files are installed to `/usr/local` by default but this can be overridden
 by using the `INSTALL_DIR` environmental variable:
 
-    INSTALL_DIR=/usr/third_party make install
+    make install INSTALL_DIR=/usr/third_party
 
 This installation method isn't fool proof but if it fails on your system you
 will probably know exactly how to fix it or have no idea how to fix it. I'm
@@ -140,6 +140,11 @@ If you executed the `"make install"` command in the previous section then you
 should be able to compile the program as follows:
 
     cc myexcel.c -o myexcel -lxlsxwriter
+
+In some environments, or if you changed the `INSTALL_DIR` location, you may
+have to provide explicit `include` and `lib` paths:
+
+cc myexcel.c -o myexcel -I/usr/local/include -L/usr/local/lib -lxlsxwriter
 
 This will create an executable that you can run to generate an Excel
 spreadsheet:
@@ -176,23 +181,35 @@ Then follow the instructions in the Linux section to
 @ref gsg_using "use the library".
 
 
-@section gsg_macos Installation on Mac OS X and iOS
+@section gsg_macos Installation on macOS and iOS
 
-The instructions for installing on Linux, shown above, will also work on Mac
-OS X.
+The instructions for installing on Linux, shown above, will also work on
+macOS.
 
 To install for Xcode and iOS use the Cocoa Pods method shown in the next
 section.
 
+On macOS you can also use [brew/homebrew](https://brew.sh), see below.
+
 @subsection gsg_cocoapods Install using Cocoa Pods for Xcode
 
-For iOS and OS X projects in Xcode you can install libxlsxwriter using
+For iOS and macOS projects in Xcode you can install libxlsxwriter using
 [CocoaPods](https://cocoapods.org).
 
-For a sample Xcode project that uses the libxlsxwriter cocoapod for iOS and OS
-X with Objective-C and Swift see [libxlsxwriter Cocoa
+For a sample Xcode project that uses the libxlsxwriter cocoapod for iOS and
+macOS with Objective-C and Swift see [libxlsxwriter Cocoa
 Examples](https://github.com/lrossi/libxlsxwriterCocoaExamples), provided by
 Ludovico Rossi.
+
+@subsection gsg_brew Installation on macOS with homebrew
+
+On macOS you can also use [brew/homebrew](https://brew.sh):
+
+    brew install libxlsxwriter
+
+    # Once installed you can compile and run a libxlsxwriter program as follows.
+    cc myexcel.c -o myexcel -I/usr/local/include -L/usr/local/lib -lxlsxwriter
+    ./myexcel
 
 @section gsg_cmake Install using CMake
 
@@ -207,6 +224,11 @@ For example:
     cmake ..
     make
     make install
+
+@note The CMake build system is currently experimental and should be
+considered as a secondary build system. The make build system described in the
+previous sections should be used in preference when integrating libxlsxwriter
+with applications or packaging.
 
 @subsection gsg_cmake_flags CMake Flags
 
@@ -347,7 +369,7 @@ library which is included in the source tree. If you wish to use the standard
 library `tmpfile()` function instead you can compile without `tmpfileplus` as
 follows:
 
-    USE_STANDARD_TMPFILE=1 make
+    make USE_STANDARD_TMPFILE=1
 
 @note When using the the standard library `tmpfile()` the `tmpdir` parameter,
 shown above, is ignored.
@@ -385,10 +407,28 @@ work in all of these environments.
 
 See also @ref gsg_tmpdir.
 
+@section gsg_minizip Linking against system minizip
+
+Libxlsxwriter uses the `minizip` component of [Zlib](http://www.zlib.net) to
+create the xlsx zip file container. The source files for `minizip` are
+included in the src tree of libxlsxwriter and are statically linked by
+default.
+
+If you have a `lminizip` library already installed on your system and prefer
+to dynamically link against that you can use the following compilation option:
+
+    make USE_SYSTEM_MINIZIP=1
+
+@section gsg_endian Compiling on Big Endian Architecture
+
+Libxlsxwriter can be compiled on a big endian system as follows:
+
+    make USE_BIG_ENDIAN=1
+
 @section gsg_next Next steps
 
-If you got libxlsxwriter built and working then the next sections will look at
-some more detailed examples.
+If you got libxlsxwriter built and working successfully then the next sections
+will look at how to create some more in-depth examples.
 
 Next: @ref tutorial01
 

@@ -2,7 +2,7 @@
 #
 # Makefile for libxlsxwriter library.
 #
-# Copyright 2014-2017, John McNamara, jmcnamara@cpan.org
+# Copyright 2014-2018, John McNamara, jmcnamara@cpan.org
 #
 
 # Keep the output quiet by default.
@@ -44,6 +44,10 @@ OBJS  = $(patsubst %.c,%.o,$(SRCS))
 # Libs to link.
 LIBS_A = $(LIB_DIR)/libxlsxwriter_test.a
 LIBS_O = -lz
+ifdef USE_SYSTEM_MINIZIP
+LIBS_O += -lminizip
+CFLAGS += -DUSE_SYSTEM_MINIZIP
+endif
 # End of LIBS
 
 # House-keeping build targets.
@@ -95,4 +99,3 @@ test_all : test_all.o $(OBJS) $(LIBS_A)
 #
 test : all test_all
 	$(Q)./test_all
-

@@ -3,7 +3,7 @@
  *
  * Used in conjunction with the libxlsxwriter library.
  *
- * Copyright 2014-2017, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
+ * Copyright 2014-2018, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
  *
  */
 
@@ -37,7 +37,12 @@ STATIC lxw_error _add_file_to_zip(lxw_packager *self, FILE * file,
 #undef SLIST_ENTRY
 
 #include <windows.h>
+
+#ifdef USE_SYSTEM_MINIZIP
+#include "minizip/iowin32.h"
+#else
 #include "../third_party/minizip/iowin32.h"
+#endif
 
 zipFile
 _open_zipfile_win32(const char *filename)
@@ -221,9 +226,9 @@ _write_image_files(lxw_packager *self)
             }
 
             err = _add_file_to_zip(self, image_stream, filename);
-            RETURN_ON_ERROR(err);
-
             fclose(image_stream);
+
+            RETURN_ON_ERROR(err);
         }
     }
 
