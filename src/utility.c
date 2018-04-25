@@ -528,14 +528,21 @@ lxw_tmpfile(char *tmpdir)
 #endif
 }
 
+/*
+ * Function to handle sprintf of doubles for locale portable code.
+ * The below implementation is based on the function emyg_dtoa.
+ */
+#ifdef USE_DOUBLE_FUNCTION
+
 #include "../third_party/emyg/emyg_dtoa.h"
 
-char*
-lxw_print_double(char* buffer, size_t buffer_size, double number)
+int
+lxw_sprintf_dbl(char *data, double number)
 {
-  char localBuffer[256];
-  emyg_dtoa(number, localBuffer);
-  strncpy(buffer, localBuffer, buffer_size);
-  buffer[buffer_size-1] = 0;
-  return buffer;
+    char localBuffer[256];
+    emyg_dtoa(number, localBuffer);
+    strncpy(data, localBuffer, LXW_ATTR_32);
+    data[LXW_ATTR_32-1] = 0;
+    return 0;
 }
+#endif

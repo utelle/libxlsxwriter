@@ -27,10 +27,10 @@ install:
   - sudo dpkg -i libminizip-dev_1.1-8_amd64.deb
 
 script:
-  - make V=1
-  - make test_functional V=1
-  - make test_unit V=1
-  - make examples V=1
-  - make test_valgrind V=1
-  - sudo make install V=1
-  - sudo make uninstall V=1
+  - make USE_DOUBLE_FUNCTION=1 V=1
+  - make test_functional USE_DOUBLE_FUNCTION=1 V=1
+  - make test_unit USE_DOUBLE_FUNCTION=1 V=1
+  - make examples USE_DOUBLE_FUNCTION=1 V=1
+  - make test_valgrind USE_DOUBLE_FUNCTION=1V=1
+  - sudo make install USE_DOUBLE_FUNCTION=1 V=1
+  - sudo make uninstall USE_DOUBLE_FUNCTION=1 V=1
