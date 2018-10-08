@@ -23,13 +23,16 @@ my @examples = (
     [ 'dates_and_times02.c',    'Writing dates and times with datetime' ],
     [ 'dates_and_times03.c',    'Dates and times with different formats' ],
     [ 'hyperlinks.c',           'A example of writing urls/hyperlinks' ],
+    [ 'rich_strings.c',         'A example of writing "rich" multi-format strings' ],
     [ 'array_formula.c',        'A example of using array formulas' ],
     [ 'utf8.c',                 'A example of some UTF-8 text' ],
     [ 'constant_memory.c',      'Write a large file with constant memory usage' ],
     [ 'merge_range.c',          'Create a merged range of cells' ],
+    [ 'merge_rich_string.c',    'Create a merged range with a rich string' ],
     [ 'autofilter.c',           'An example of a worksheet autofilter' ],
     [ 'data_validate.c',        'Examples of worksheet data validation and drop down lists' ],
     [ 'images.c',               'Example of adding images to a worksheet.' ],
+    [ 'image_buffer.c',         'Example of adding an image from a memory buffer.' ],
     [ 'headers_footers.c',      'Example of adding worksheet headers/footers' ],
     [ 'defined_name.c',         'Example of how to create defined names' ],
     [ 'outline.c',              'Example of grouping and outlines' ],
@@ -56,6 +59,7 @@ my @examples = (
     [ 'chart_fonts.c',          'Examples of using charts fonts' ],
     [ 'chart_pattern.c',        'Examples of using charts patterns' ],
     [ 'chart_styles.c',         'Examples of built-in charts styles' ],
+    [ 'chartsheet.c',           'Example of a chartsheet chart' ],
 );
 
 # Convert the array refs to a hash for lookups.
