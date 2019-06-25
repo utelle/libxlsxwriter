@@ -22,6 +22,7 @@ It supports features such as:
 - Charts.
 - Data validation and drop down lists.
 - Worksheet PNG/JPEG images.
+- Support for adding Macros.
 - Memory optimization mode for writing large files.
 - Source code available on [GitHub](https://github.com/jmcnamara/libxlsxwriter).
 - FreeBSD license.
@@ -59,7 +60,7 @@ int main() {
     /* Text with formatting. */
     worksheet_write_string(worksheet, 1, 0, "World", format);
 
-    /* Writer some numbers. */
+    /* Write some numbers. */
     worksheet_write_number(worksheet, 2, 0, 123,     NULL);
     worksheet_write_number(worksheet, 3, 0, 123.456, NULL);
 

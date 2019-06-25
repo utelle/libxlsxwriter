@@ -3,7 +3,7 @@
  *
  * Test case for writing data in optimization mode.
  *
- * Copyright 2014-2018, John McNamara, jmcnamara@cpan.org
+ * Copyright 2014-2019, John McNamara, jmcnamara@cpan.org
  *
  */
 
@@ -11,7 +11,7 @@
 
 int main() {
 
-    lxw_workbook_options options = {1, NULL};
+    lxw_workbook_options options = {LXW_TRUE, NULL, LXW_FALSE};
 
     /* Use deprecated constructor for testing. */
     lxw_workbook  *workbook  = new_workbook_opt("test_optimize26.xlsx", &options);

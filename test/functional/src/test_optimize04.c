@@ -3,7 +3,7 @@
  *
  * Test to compare output against Excel files.
  *
- * Copyright 2014-2018, John McNamara, jmcnamara@cpan.org
+ * Copyright 2014-2019, John McNamara, jmcnamara@cpan.org
  *
  */
 
@@ -11,7 +11,7 @@
 
 int main() {
 
-    lxw_workbook_options options = {LXW_TRUE, NULL};
+    lxw_workbook_options options = {LXW_TRUE, NULL, LXW_FALSE};
 
     lxw_workbook  *workbook  = workbook_new_opt("test_optimize04.xlsx", &options);
     lxw_worksheet *worksheet = workbook_add_worksheet(workbook, NULL);

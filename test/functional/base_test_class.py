@@ -2,7 +2,7 @@
 #
 # Base test class for libxlsxwriter functional tests.
 #
-# Copyright 2014-2018, John McNamara, jmcnamara@cpan.org
+# Copyright 2014-2019, John McNamara, jmcnamara@cpan.org
 #
 
 import unittest
@@ -32,8 +32,11 @@ class XLSXBaseTest(unittest.TestCase):
         got = os.system("cd test/functional/src; ./%s" % exe_name)
         self.assertEqual(got, self.no_system_error)
 
-        # Create the path/file names for the xlsx files to compare.
-        got_filename = exe_name.replace('test_', '') + '.xlsx'
+        # Create the path/file names for the xlsx/xlsm files to compare.
+        if exp_filename and exp_filename.endswith('.xlsm'):
+            got_filename = exe_name.replace('test_', '') + '.xlsm'
+        else:
+            got_filename = exe_name.replace('test_', '') + '.xlsx'
 
         if not exp_filename:
             exp_filename = got_filename
