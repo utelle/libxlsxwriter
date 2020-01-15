@@ -31,8 +31,8 @@ script:
   - make USE_DOUBLE_FUNCTION=1 V=1
   - make test_functional USE_DOUBLE_FUNCTION=1 V=1
   - make test_unit USE_DOUBLE_FUNCTION=1 V=1
+  - make test_valgrind USE_DOUBLE_FUNCTION=1 V=1
   - make test_cmake USE_DOUBLE_FUNCTION=1 V=1
   - make examples USE_DOUBLE_FUNCTION=1 V=1
-  - make test_valgrind USE_DOUBLE_FUNCTION=1 V=1
   - sudo make install USE_DOUBLE_FUNCTION=1 V=1
   - sudo make uninstall USE_DOUBLE_FUNCTION=1 V=1
