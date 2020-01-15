@@ -1,7 +1,7 @@
 /*
  * libxlsxwriter
  *
- * Copyright 2014-2019, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
+ * Copyright 2014-2020, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
  */
 
 /**
@@ -9,7 +9,7 @@
  *
  * @brief Utility functions for libxlsxwriter.
  *
- * <!-- Copyright 2014-2019, John McNamara, jmcnamara@cpan.org -->
+ * <!-- Copyright 2014-2020, John McNamara, jmcnamara@cpan.org -->
  *
  */
 
@@ -104,6 +104,20 @@ extern "C" {
 const char *lxw_version(void);
 
 /**
+ * @brief Retrieve the library version ID.
+ *
+ * @return The version ID.
+ *
+ * Get the library version such as "X.Y.Z" as a XYZ integer.
+ *
+ *  @code
+ *      printf("Libxlsxwriter version id = %d\n", lxw_version_id());
+ *  @endcode
+ *
+ */
+uint16_t lxw_version_id(void);
+
+/**
  * @brief Converts a libxlsxwriter error number to a string.
  *
  * The `%lxw_strerror` function converts a libxlsxwriter error number defined
@@ -177,6 +191,7 @@ void lxw_str_tolower(char *str);
 #endif
 
 FILE *lxw_tmpfile(char *tmpdir);
+FILE *lxw_fopen(const char *filename, const char *mode);
 
 /* Use a user defined function to format doubles in sprintf or else a simple
  * macro (the default). */

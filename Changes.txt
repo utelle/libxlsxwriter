@@ -1,6 +1,82 @@
 /**
 @page changes Changes
 
+
+## 0.9.3 January 13 2019
+
+- Fix Xcode/Cocoapods build warnings.
+
+
+## 0.9.2 January 13 2019
+
+- Added support for writing cell comments, see @ref working_with_comments.
+
+- Makefile now respects DESTDIR and PREFIX, including when setting rpath on
+  macOS.
+
+- Changed function names in bundled MD5 code to avoid conflicts with OpenSSL.
+
+
+## 0.9.1 December 26 2019
+
+- Fix to missing MD5 linkage in Cocoapod file.
+  Issue [#259][gh_259].
+
+  [gh_259]: https://github.com/jmcnamara/libxlsxwriter/issues/259
+
+
+## 0.9.0 December 26 2019
+
+- Fix to avoid duplicate images being copied to an libxlsxwriter file. Excel
+  uses an optimization where it only stores one copy of a repeated/duplicate
+  image in a workbook. Libxlsxwriter didn't do this which meant that the file
+  size would increase when then was a large number of repeated images. This
+  release fixes that issue and replicates Excel's behavior.
+
+  Note, that this change adds a dependency on the [Openwall MD5] library,
+  which is now included with the libxlsxwriter third party source files. It is
+  possible to compile libxlsxwriter without this library, and thus getting the
+  older behavior, by passing `USE_NO_MD5=1` to make.
+
+
+  [Openwall MD5]: https://openwall.info/wiki/people/solar/software/public-domain-source-code/md5
+
+## 0.8.9 December 16 2019
+
+- Added support for default hyperlink style in `worksheet_write_url()`.
+
+- Added support for hyperlink in images, see `worksheet_insert_image_opt()`.
+
+- Fixed several `worksheet_write_url()` edge cases.
+
+
+## 0.8.8 November 17 2019
+
+- Added option to allow a user defined, or overridden, image description used
+  with `worksheet_insert_image()`. By default it uses the filename as the
+  description.
+  Issue [#238][gh_238].
+
+  [gh_238]: https://github.com/jmcnamara/libxlsxwriter/issues/238
+
+- Added Windows portable version of `fopen` to handle utf8 filenames when
+  working with images.
+  Issue [#238][gh_238].
+
+  [gh_238]: https://github.com/jmcnamara/libxlsxwriter/issues/238
+
+- Added an option to allow chart fonts to be rotation to 270 deg to give a
+  stacked orientation. Also added support for East Asian vertical chart fonts.
+
+- Refactored struct types used in pubic APIs to remove or document hidden
+  fields. @b Note: This change introduces backward incompatible API
+  changes. However, it should minimize any future changes of this nature.
+  See issue [#252][gh_252].
+
+  [gh_252]: https://github.com/jmcnamara/libxlsxwriter/issues/252
+
+
+
 ## 0.8.7 June 20 2019
 
 - Added support for adding VBA macros to workbooks. These macros can be

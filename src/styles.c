@@ -3,7 +3,7 @@
  *
  * Used in conjunction with the libxlsxwriter library.
  *
- * Copyright 2014-2019, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
+ * Copyright 2014-2020, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
  *
  */
 
@@ -241,6 +241,23 @@ _write_font_color_rgb(lxw_styles *self, int32_t rgb)
 }
 
 /*
+ * Write the <color> element for indexed colors.
+ */
+STATIC void
+_write_font_color_indexed(lxw_styles *self, uint8_t index)
+{
+    struct xml_attribute_list attributes;
+    struct xml_attribute *attribute;
+
+    LXW_INIT_ATTRIBUTES();
+    LXW_PUSH_ATTRIBUTES_INT("indexed", index);
+
+    lxw_xml_empty_tag(self->file, "color", &attributes);
+
+    LXW_FREE_ATTRIBUTES();
+}
+
+/*
  * Write the <name> element.
  */
 STATIC void
@@ -386,6 +403,8 @@ _write_font(lxw_styles *self, lxw_format *format, uint8_t is_rich_string)
 
     if (format->theme)
         _write_font_color_theme(self, format->theme);
+    else if (format->color_indexed)
+        _write_font_color_indexed(self, format->color_indexed);
     else if (format->font_color != LXW_COLOR_UNSET)
         _write_font_color_rgb(self, format->font_color);
     else
@@ -402,10 +421,33 @@ _write_font(lxw_styles *self, lxw_format *format, uint8_t is_rich_string)
         _write_font_scheme(self, format->font_scheme);
     }
 
+    if (format->hyperlink) {
+        self->has_hyperlink = LXW_TRUE;
+
+        if (self->hyperlink_font_id == 0)
+            self->hyperlink_font_id = format->font_index;
+    }
+
     if (is_rich_string)
         lxw_xml_end_tag(self->file, "rPr");
     else
         lxw_xml_end_tag(self->file, "font");
+}
+
+/*
+ * Write the <font> element for comments.
+ */
+STATIC void
+_write_comment_font(lxw_styles *self)
+{
+    lxw_xml_start_tag(self->file, "font", NULL);
+
+    _write_font_size(self, 8);
+    _write_font_color_indexed(self, 81);
+    _write_font_name(self, "Tahoma", LXW_FALSE);
+    _write_font_family(self, 2);
+
+    lxw_xml_end_tag(self->file, "font");
 }
 
 /*
@@ -417,9 +459,15 @@ _write_fonts(lxw_styles *self)
     struct xml_attribute_list attributes;
     struct xml_attribute *attribute;
     lxw_format *format;
+    uint32_t count;
 
     LXW_INIT_ATTRIBUTES();
-    LXW_PUSH_ATTRIBUTES_INT("count", self->font_count);
+
+    count = self->font_count;
+    if (self->has_comments)
+        count++;
+
+    LXW_PUSH_ATTRIBUTES_INT("count", count);
 
     lxw_xml_start_tag(self->file, "fonts", &attributes);
 
@@ -427,6 +475,9 @@ _write_fonts(lxw_styles *self)
         if (format->has_font)
             _write_font(self, format, LXW_FALSE);
     }
+
+    if (self->has_comments)
+        _write_comment_font(self);
 
     lxw_xml_end_tag(self->file, "fonts");
 
@@ -720,21 +771,69 @@ _write_borders(lxw_styles *self)
 }
 
 /*
+ * Write the <alignment> element for hyperlinks.
+ */
+STATIC void
+_write_hyperlink_alignment(lxw_styles *self)
+{
+    struct xml_attribute_list attributes;
+    struct xml_attribute *attribute;
+
+    LXW_INIT_ATTRIBUTES();
+    LXW_PUSH_ATTRIBUTES_STR("vertical", "top");
+
+    lxw_xml_empty_tag(self->file, "alignment", &attributes);
+
+    LXW_FREE_ATTRIBUTES();
+}
+
+/*
+ * Write the <protection> element for hyperlinks.
+ */
+STATIC void
+_write_hyperlink_protection(lxw_styles *self)
+{
+    struct xml_attribute_list attributes;
+    struct xml_attribute *attribute;
+
+    LXW_INIT_ATTRIBUTES();
+    LXW_PUSH_ATTRIBUTES_STR("locked", "0");
+
+    lxw_xml_empty_tag(self->file, "protection", &attributes);
+
+    LXW_FREE_ATTRIBUTES();
+}
+
+/*
  * Write the <xf> element for styles.
  */
 STATIC void
-_write_style_xf(lxw_styles *self)
+_write_style_xf(lxw_styles *self, uint8_t has_hyperlink, uint16_t font_id)
 {
     struct xml_attribute_list attributes;
     struct xml_attribute *attribute;
 
     LXW_INIT_ATTRIBUTES();
     LXW_PUSH_ATTRIBUTES_STR("numFmtId", "0");
-    LXW_PUSH_ATTRIBUTES_STR("fontId", "0");
+    LXW_PUSH_ATTRIBUTES_INT("fontId", font_id);
     LXW_PUSH_ATTRIBUTES_STR("fillId", "0");
     LXW_PUSH_ATTRIBUTES_STR("borderId", "0");
 
-    lxw_xml_empty_tag(self->file, "xf", &attributes);
+    if (has_hyperlink) {
+        LXW_PUSH_ATTRIBUTES_STR("applyNumberFormat", "0");
+        LXW_PUSH_ATTRIBUTES_STR("applyFill", "0");
+        LXW_PUSH_ATTRIBUTES_STR("applyBorder", "0");
+        LXW_PUSH_ATTRIBUTES_STR("applyAlignment", "0");
+        LXW_PUSH_ATTRIBUTES_STR("applyProtection", "0");
+
+        lxw_xml_start_tag(self->file, "xf", &attributes);
+        _write_hyperlink_alignment(self);
+        _write_hyperlink_protection(self);
+        lxw_xml_end_tag(self->file, "xf");
+    }
+    else {
+        lxw_xml_empty_tag(self->file, "xf", &attributes);
+    }
 
     LXW_FREE_ATTRIBUTES();
 }
@@ -749,10 +848,18 @@ _write_cell_style_xfs(lxw_styles *self)
     struct xml_attribute *attribute;
 
     LXW_INIT_ATTRIBUTES();
-    LXW_PUSH_ATTRIBUTES_STR("count", "1");
+
+    if (self->has_hyperlink)
+        LXW_PUSH_ATTRIBUTES_STR("count", "2");
+    else
+        LXW_PUSH_ATTRIBUTES_STR("count", "1");
 
     lxw_xml_start_tag(self->file, "cellStyleXfs", &attributes);
-    _write_style_xf(self);
+    _write_style_xf(self, LXW_FALSE, 0);
+
+    if (self->has_hyperlink)
+        _write_style_xf(self, self->has_hyperlink, self->hyperlink_font_id);
+
     lxw_xml_end_tag(self->file, "cellStyleXfs");
 
     LXW_FREE_ATTRIBUTES();
@@ -936,13 +1043,13 @@ _write_xf(lxw_styles *self, lxw_format *format)
     LXW_PUSH_ATTRIBUTES_INT("fontId", format->font_index);
     LXW_PUSH_ATTRIBUTES_INT("fillId", format->fill_index);
     LXW_PUSH_ATTRIBUTES_INT("borderId", format->border_index);
-    LXW_PUSH_ATTRIBUTES_STR("xfId", "0");
+    LXW_PUSH_ATTRIBUTES_INT("xfId", format->xf_id);
 
     if (format->num_format_index > 0)
         LXW_PUSH_ATTRIBUTES_STR("applyNumberFormat", "1");
 
     /* Add applyFont attribute if XF format uses a font element. */
-    if (format->font_index > 0)
+    if (format->font_index > 0 && !format->hyperlink)
         LXW_PUSH_ATTRIBUTES_STR("applyFont", "1");
 
     /* Add applyFill attribute if XF format uses a fill element. */
@@ -954,10 +1061,10 @@ _write_xf(lxw_styles *self, lxw_format *format)
         LXW_PUSH_ATTRIBUTES_STR("applyBorder", "1");
 
     /* We can also have applyAlignment without a sub-element. */
-    if (apply_alignment)
+    if (apply_alignment || format->hyperlink)
         LXW_PUSH_ATTRIBUTES_STR("applyAlignment", "1");
 
-    if (has_protection)
+    if (has_protection || format->hyperlink)
         LXW_PUSH_ATTRIBUTES_STR("applyProtection", "1");
 
     /* Write XF with sub-elements if required. */
@@ -988,14 +1095,27 @@ _write_cell_xfs(lxw_styles *self)
     struct xml_attribute_list attributes;
     struct xml_attribute *attribute;
     lxw_format *format;
+    uint32_t count = self->xf_count;
+    uint32_t i = 0;
+
+    /* If the last format is "font_only" it is for the comment font and
+     * shouldn't be counted. This is a workaround to get the last object
+     * in the list since STAILQ_LAST() requires __containerof and isn't
+     * ANSI compatible. */
+    STAILQ_FOREACH(format, self->xf_formats, list_pointers) {
+        i++;
+        if (i == self->xf_count && format->font_only)
+            count--;
+    }
 
     LXW_INIT_ATTRIBUTES();
-    LXW_PUSH_ATTRIBUTES_INT("count", self->xf_count);
+    LXW_PUSH_ATTRIBUTES_INT("count", count);
 
     lxw_xml_start_tag(self->file, "cellXfs", &attributes);
 
     STAILQ_FOREACH(format, self->xf_formats, list_pointers) {
-        _write_xf(self, format);
+        if (!format->font_only)
+            _write_xf(self, format);
     }
 
     lxw_xml_end_tag(self->file, "cellXfs");
@@ -1007,15 +1127,16 @@ _write_cell_xfs(lxw_styles *self)
  * Write the <cellStyle> element.
  */
 STATIC void
-_write_cell_style(lxw_styles *self)
+_write_cell_style(lxw_styles *self, char *name, uint8_t xf_id,
+                  uint8_t builtin_id)
 {
     struct xml_attribute_list attributes;
     struct xml_attribute *attribute;
 
     LXW_INIT_ATTRIBUTES();
-    LXW_PUSH_ATTRIBUTES_STR("name", "Normal");
-    LXW_PUSH_ATTRIBUTES_STR("xfId", "0");
-    LXW_PUSH_ATTRIBUTES_STR("builtinId", "0");
+    LXW_PUSH_ATTRIBUTES_STR("name", name);
+    LXW_PUSH_ATTRIBUTES_INT("xfId", xf_id);
+    LXW_PUSH_ATTRIBUTES_INT("builtinId", builtin_id);
 
     lxw_xml_empty_tag(self->file, "cellStyle", &attributes);
 
@@ -1031,10 +1152,19 @@ _write_cell_styles(lxw_styles *self)
     struct xml_attribute_list attributes;
     struct xml_attribute *attribute;
     LXW_INIT_ATTRIBUTES();
-    LXW_PUSH_ATTRIBUTES_STR("count", "1");
+
+    if (self->has_hyperlink)
+        LXW_PUSH_ATTRIBUTES_STR("count", "2");
+    else
+        LXW_PUSH_ATTRIBUTES_STR("count", "1");
 
     lxw_xml_start_tag(self->file, "cellStyles", &attributes);
-    _write_cell_style(self);
+
+    if (self->has_hyperlink)
+        _write_cell_style(self, "Hyperlink", 1, 8);
+
+    _write_cell_style(self, "Normal", 0, 0);
+
     lxw_xml_end_tag(self->file, "cellStyles");
 
     LXW_FREE_ATTRIBUTES();

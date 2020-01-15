@@ -1,7 +1,7 @@
 /*
  * Tests for the lib_xlsx_writer library.
  *
- * Copyright 2014-2019, John McNamara, jmcnamara@cpan.org
+ * Copyright 2014-2020, John McNamara, jmcnamara@cpan.org
  *
  */
 
@@ -87,6 +87,8 @@ CTEST(drawing, drawing_image01) {
 
     drawing_object->width  = 1142857;
     drawing_object->height = 1142857;
+
+    drawing_object->rel_index = 1;
 
     lxw_add_drawing_object(drawing, drawing_object);
 

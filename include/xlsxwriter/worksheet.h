@@ -1,7 +1,7 @@
 /*
  * libxlsxwriter
  *
- * Copyright 2014-2019, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
+ * Copyright 2014-2020, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
  */
 
 /**
@@ -55,6 +55,7 @@
 #include "format.h"
 #include "styles.h"
 #include "utility.h"
+#include "relationships.h"
 
 #define LXW_ROW_MAX           1048576
 #define LXW_COL_MAX           16384
@@ -62,6 +63,7 @@
 #define LXW_HEADER_FOOTER_MAX 255
 #define LXW_MAX_NUMBER_URLS   65530
 #define LXW_PANE_NAME_LENGTH  12        /* bottomRight + 1 */
+#define LXW_IMAGE_BUFFER_SIZE 1024
 
 /* The Excel 2007 specification says that the maximum number of page
  * breaks is 1026. However, in practice it is actually 1023. */
@@ -202,6 +204,20 @@ enum lxw_validation_error_types {
     LXW_VALIDATION_ERROR_TYPE_INFORMATION
 };
 
+/** Set the display type for a cell comment. This is hidden by default but
+ *  can be set to visible with the `worksheet_show_comments()` function. */
+enum lxw_comment_display_types {
+    /** Default to the worksheet default which can be hidden or visible.*/
+    LXW_COMMENT_DISPLAY_DEFAULT,
+
+    /** Hide the cell comment. Usually the default. */
+    LXW_COMMENT_DISPLAY_HIDDEN,
+
+    /** Show the cell comment. Can also be set for the worksheet with the
+     *  `worksheet_show_comments()` function.*/
+    LXW_COMMENT_DISPLAY_VISIBLE
+};
+
 enum cell_types {
     NUMBER_CELL = 1,
     STRING_CELL,
@@ -211,6 +227,7 @@ enum cell_types {
     ARRAY_FORMULA_CELL,
     BLANK_CELL,
     BOOLEAN_CELL,
+    COMMENT,
     HYPERLINK_URL,
     HYPERLINK_INTERNAL,
     HYPERLINK_EXTERNAL
@@ -225,6 +242,7 @@ enum pane_types {
 
 /* Define the tree.h RB structs for the red-black head types. */
 RB_HEAD(lxw_table_cells, lxw_cell);
+RB_HEAD(lxw_drawing_rel_ids, lxw_drawing_rel_id);
 
 /* Define a RB_TREE struct manually to add extra members. */
 struct lxw_table_rows {
@@ -257,11 +275,23 @@ struct lxw_table_rows {
     /* Add unused struct to allow adding a semicolon */   \
     struct lxw_rb_generate_cell{int unused;}
 
+#define LXW_RB_GENERATE_DRAWING_REL_IDS(name, type, field, cmp) \
+    RB_GENERATE_INSERT_COLOR(name, type, field, static)         \
+    RB_GENERATE_REMOVE_COLOR(name, type, field, static)         \
+    RB_GENERATE_INSERT(name, type, field, cmp, static)          \
+    RB_GENERATE_REMOVE(name, type, field, static)               \
+    RB_GENERATE_FIND(name, type, field, cmp, static)            \
+    RB_GENERATE_NEXT(name, type, field, static)                 \
+    RB_GENERATE_MINMAX(name, type, field, static)               \
+    /* Add unused struct to allow adding a semicolon */         \
+    struct lxw_rb_generate_drawing_rel_ids{int unused;}
+
 STAILQ_HEAD(lxw_merged_ranges, lxw_merged_range);
 STAILQ_HEAD(lxw_selections, lxw_selection);
-STAILQ_HEAD(lxw_data_validations, lxw_data_validation);
-STAILQ_HEAD(lxw_image_data, lxw_image_options);
-STAILQ_HEAD(lxw_chart_data, lxw_image_options);
+STAILQ_HEAD(lxw_data_validations, lxw_data_val_obj);
+STAILQ_HEAD(lxw_image_props, lxw_object_properties);
+STAILQ_HEAD(lxw_chart_props, lxw_object_properties);
+STAILQ_HEAD(lxw_comment_objs, lxw_vml_obj);
 
 /**
  * @brief Options for rows and columns.
@@ -279,9 +309,13 @@ STAILQ_HEAD(lxw_chart_data, lxw_image_options);
  *
  */
 typedef struct lxw_row_col_options {
-    /** Hide the row/column */
+    /** Hide the row/column. @ref ww_outlines_grouping.*/
     uint8_t hidden;
+
+    /** Outline level. See @ref ww_outlines_grouping.*/
     uint8_t level;
+
+    /** Set the outline row as collapsed. See @ref ww_outlines_grouping.*/
     uint8_t collapsed;
 } lxw_row_col_options;
 
@@ -405,8 +439,6 @@ typedef struct lxw_data_validation {
      */
     uint8_t dropdown;
 
-    uint8_t is_between;
-
     /**
      * This parameter is used to set the limiting value to which the criteria
      * is applied using a whole or decimal number.
@@ -519,14 +551,39 @@ typedef struct lxw_data_validation {
      */
     char *error_message;
 
-    char sqref[LXW_MAX_CELL_RANGE_LENGTH];
-
-    STAILQ_ENTRY (lxw_data_validation) list_pointers;
-
 } lxw_data_validation;
 
+/* A copy of lxw_data_validation which is used internally and which contains
+ * some additional fields.
+ */
+typedef struct lxw_data_val_obj {
+    uint8_t validate;
+    uint8_t criteria;
+    uint8_t ignore_blank;
+    uint8_t show_input;
+    uint8_t show_error;
+    uint8_t error_type;
+    uint8_t dropdown;
+    double value_number;
+    char *value_formula;
+    char **value_list;
+    double minimum_number;
+    char *minimum_formula;
+    lxw_datetime minimum_datetime;
+    double maximum_number;
+    char *maximum_formula;
+    lxw_datetime maximum_datetime;
+    char *input_title;
+    char *input_message;
+    char *error_title;
+    char *error_message;
+    char sqref[LXW_MAX_CELL_RANGE_LENGTH];
+
+    STAILQ_ENTRY (lxw_data_val_obj) list_pointers;
+} lxw_data_val_obj;
+
 /**
- * @brief Options for inserted images
+ * @brief Options for inserted images.
  *
  * Options for modifying images inserted via `worksheet_insert_image_opt()`.
  *
@@ -545,15 +602,62 @@ typedef struct lxw_image_options {
     /** Y scale of the image as a decimal. */
     double y_scale;
 
+    /** Object position - not implemented yet.  Set to 0.*/
+    uint8_t object_position;
+
+    /** Optional description of the image. Defaults to the image filename
+     *  as in Excel. Set to "" to ignore the description field. */
+    char *description;
+
+    /** Add an optional hyperlink to the image. Follows the same URL rules
+     *  and types as `worksheet_write_url()`. */
+    char *url;
+
+    /** Add an optional mouseover tip for a hyperlink to the image. */
+    char *tip;
+
+} lxw_image_options;
+
+/**
+ * @brief Options for inserted charts.
+ *
+ * Options for modifying charts inserted via `worksheet_insert_chart_opt()`.
+ *
+ */
+typedef struct lxw_chart_options {
+
+    /** Offset from the left of the cell in pixels. */
+    int32_t x_offset;
+
+    /** Offset from the top of the cell in pixels. */
+    int32_t y_offset;
+
+    /** X scale of the chart as a decimal. */
+    double x_scale;
+
+    /** Y scale of the chart as a decimal. */
+    double y_scale;
+
+    /** Object position - not implemented yet. Set to 0. */
+    uint8_t object_position;
+
+} lxw_chart_options;
+
+/* Internal struct to represent lxw_image_options and lxw_chart_options
+ * values as well as internal metadata.
+ */
+typedef struct lxw_object_properties {
+    int32_t x_offset;
+    int32_t y_offset;
+    double x_scale;
+    double y_scale;
     lxw_row_t row;
     lxw_col_t col;
     char *filename;
     char *description;
     char *url;
     char *tip;
-    uint8_t anchor;
-
-    /* Internal metadata. */
+    uint8_t object_position;
     FILE *stream;
     uint8_t image_type;
     uint8_t is_image_buffer;
@@ -565,10 +669,119 @@ typedef struct lxw_image_options {
     double x_dpi;
     double y_dpi;
     lxw_chart *chart;
+    uint8_t is_duplicate;
+    char *md5;
 
-    STAILQ_ENTRY (lxw_image_options) list_pointers;
+    STAILQ_ENTRY (lxw_object_properties) list_pointers;
+} lxw_object_properties;
 
-} lxw_image_options;
+/**
+ * @brief Options for inserted comments.
+ *
+ * Options for modifying comments inserted via `worksheet_write_comment_opt()`.
+ *
+ */
+typedef struct lxw_comment_options {
+
+    /** This option is used to make a cell comment visible when the worksheet
+     *  is opened. The default behavior in Excel is that comments are
+     *  initially hidden. However, it is also possible in Excel to make
+     *  individual comments or all comments visible.  You can make all
+     *  comments in the worksheet visible using the
+     *  `worksheet_show_comments()` function. Defaults to
+     *  LXW_COMMENT_DISPLAY_DEFAULT. See also @ref ww_comments_visible. */
+    uint8_t visible;
+
+    /** This option is used to indicate the author of the cell comment. Excel
+     *  displays the author in the status bar at the bottom of the
+     *  worksheet. The default author for all cell comments in a worksheet can
+     *  be set using the `worksheet_set_comments_author()` function. Set to
+     *  NULL if not required.  See also @ref ww_comments_author. */
+    char *author;
+
+    /** This option is used to set the width of the cell comment box
+     *  explicitly in pixels. The default width is 128 pixels. See also @ref
+     *  ww_comments_width. */
+    uint16_t width;
+
+    /** This option is used to set the height of the cell comment box
+     *  explicitly in pixels. The default height is 74 pixels.  See also @ref
+     *  ww_comments_height. */
+    uint16_t height;
+
+    /** X scale of the comment as a decimal. See also
+     * @ref ww_comments_x_scale. */
+    double x_scale;
+
+    /** Y scale of the comment as a decimal. See also
+     * @ref ww_comments_y_scale. */
+    double y_scale;
+
+    /** This option is used to set the background color of cell comment
+     *  box. The color should be an RGB integer value, see @ref
+     *  working_with_colors. See also @ref ww_comments_color. */
+    lxw_color_t color;
+
+    /** This option is used to set the font for the comment. The default font
+     *  is 'Tahoma'.  See also @ref ww_comments_font_name. */
+    char *font_name;
+
+     /** This option is used to set the font size for the comment. The default
+      * is 8. See also @ref ww_comments_font_size. */
+    double font_size;
+
+    /** This option is used to set the font family number for the comment.
+     *  Not required very often. Set to 0. */
+    uint8_t font_family;
+
+    /** This option is used to set the row in which the comment will
+     *  appear. By default Excel displays comments one cell to the right and
+     *  one cell above the cell to which the comment relates. The `start_row`
+     *  and `start_col` options should both be set to 0 if not used.  See also
+     *  @ref ww_comments_start_row. */
+    lxw_row_t start_row;
+
+    /** This option is used to set the column in which the comment will
+     *   appear. See the `start_row` option for more information and see also
+     *   @ref ww_comments_start_col. */
+    lxw_col_t start_col;
+
+    /** Offset from the left of the cell in pixels. See also
+     * @ref ww_comments_x_offset. */
+    int32_t x_offset;
+
+    /** Offset from the top of the cell in pixels. See also
+     * @ref ww_comments_y_offset. */
+    int32_t y_offset;
+
+} lxw_comment_options;
+
+/* Internal structure for VML object options. */
+typedef struct lxw_vml_obj {
+
+    lxw_row_t row;
+    lxw_col_t col;
+    lxw_row_t start_row;
+    lxw_col_t start_col;
+    int32_t x_offset;
+    int32_t y_offset;
+    uint32_t col_absolute;
+    uint32_t row_absolute;
+    uint32_t width;
+    uint32_t height;
+    lxw_color_t color;
+    uint8_t font_family;
+    uint8_t visible;
+    uint32_t author_id;
+    double font_size;
+    struct lxw_drawing_coords from;
+    struct lxw_drawing_coords to;
+    char *author;
+    char *font_name;
+    char *text;
+    STAILQ_ENTRY (lxw_vml_obj) list_pointers;
+
+} lxw_vml_obj;
 
 /**
  * @brief Header and footer options.
@@ -637,10 +850,31 @@ typedef struct lxw_protection {
     /** Turn off chartsheet objects. */
     uint8_t no_objects;
 
+} lxw_protection;
+
+/* Internal struct to copy lxw_protection options and internal metadata. */
+typedef struct lxw_protection_obj {
+    uint8_t no_select_locked_cells;
+    uint8_t no_select_unlocked_cells;
+    uint8_t format_cells;
+    uint8_t format_columns;
+    uint8_t format_rows;
+    uint8_t insert_columns;
+    uint8_t insert_rows;
+    uint8_t insert_hyperlinks;
+    uint8_t delete_columns;
+    uint8_t delete_rows;
+    uint8_t sort;
+    uint8_t autofilter;
+    uint8_t pivot_tables;
+    uint8_t scenarios;
+    uint8_t objects;
+    uint8_t no_content;
+    uint8_t no_objects;
     uint8_t no_sheet;
     uint8_t is_configured;
     char hash[5];
-} lxw_protection;
+} lxw_protection_obj;
 
 /**
  * @brief Struct to represent a rich string format/string pair.
@@ -674,12 +908,15 @@ typedef struct lxw_worksheet {
     FILE *optimize_tmpfile;
     struct lxw_table_rows *table;
     struct lxw_table_rows *hyperlinks;
+    struct lxw_table_rows *comments;
     struct lxw_cell **array;
     struct lxw_merged_ranges *merged_ranges;
     struct lxw_selections *selections;
     struct lxw_data_validations *data_validations;
-    struct lxw_image_data *image_data;
-    struct lxw_chart_data *chart_data;
+    struct lxw_image_props *image_props;
+    struct lxw_chart_props *chart_data;
+    struct lxw_drawing_rel_ids *drawing_rel_ids;
+    struct lxw_comment_objs *comment_objs;
 
     lxw_row_t dim_rowmin;
     lxw_row_t dim_rowmax;
@@ -773,21 +1010,34 @@ typedef struct lxw_worksheet {
     struct lxw_autofilter autofilter;
 
     uint16_t merged_range_count;
+    uint16_t max_url_length;
 
     lxw_row_t *hbreaks;
     lxw_col_t *vbreaks;
     uint16_t hbreaks_count;
     uint16_t vbreaks_count;
 
+    uint32_t drawing_rel_id;
     struct lxw_rel_tuples *external_hyperlinks;
     struct lxw_rel_tuples *external_drawing_links;
     struct lxw_rel_tuples *drawing_links;
 
     struct lxw_panes panes;
 
-    struct lxw_protection protection;
+    struct lxw_protection_obj protection;
 
     lxw_drawing *drawing;
+    lxw_format *default_url_format;
+
+    uint8_t has_vml;
+    uint8_t has_comments;
+    uint8_t has_header_vml;
+    lxw_rel_tuple *external_vml_comment_link;
+    lxw_rel_tuple *external_comment_link;
+    char *comment_author;
+    char *vml_data_id_str;
+    uint32_t vml_shape_id;
+    uint8_t comment_display_default;
 
     STAILQ_ENTRY (lxw_worksheet) list_pointers;
 
@@ -806,6 +1056,8 @@ typedef struct lxw_worksheet_init_data {
     char *name;
     char *quoted_name;
     char *tmpdir;
+    lxw_format *default_url_format;
+    uint16_t max_url_length;
 
 } lxw_worksheet_init_data;
 
@@ -820,6 +1072,7 @@ typedef struct lxw_row {
     uint8_t row_changed;
     uint8_t data_changed;
     uint8_t height_changed;
+
     struct lxw_table_cells *cells;
 
     /* tree management pointers for tree.h. */
@@ -832,6 +1085,7 @@ typedef struct lxw_cell {
     lxw_col_t col_num;
     enum cell_types type;
     lxw_format *format;
+    lxw_vml_obj *comment;
 
     union {
         double number;
@@ -848,6 +1102,14 @@ typedef struct lxw_cell {
     RB_ENTRY (lxw_cell) tree_pointers;
 } lxw_cell;
 
+/* Struct to represent a drawing Target/ID pair. */
+typedef struct lxw_drawing_rel_id {
+    uint32_t id;
+    char *target;
+
+    RB_ENTRY (lxw_drawing_rel_id) tree_pointers;
+} lxw_drawing_rel_id;
+
 /* *INDENT-OFF* */
 #ifdef __cplusplus
 extern "C" {
@@ -857,7 +1119,7 @@ extern "C" {
 /**
  * @brief Write a number to a worksheet cell.
  *
- * @param worksheet pointer to a lxw_worksheet instance to be updated.
+ * @param worksheet Pointer to a lxw_worksheet instance to be updated.
  * @param row       The zero indexed row number.
  * @param col       The zero indexed column number.
  * @param number    The number to write to the cell.
@@ -904,7 +1166,7 @@ lxw_error worksheet_write_number(lxw_worksheet *worksheet,
 /**
  * @brief Write a string to a worksheet cell.
  *
- * @param worksheet pointer to a lxw_worksheet instance to be updated.
+ * @param worksheet Pointer to a lxw_worksheet instance to be updated.
  * @param row       The zero indexed row number.
  * @param col       The zero indexed column number.
  * @param string    String to write to cell.
@@ -952,7 +1214,7 @@ lxw_error worksheet_write_string(lxw_worksheet *worksheet,
 /**
  * @brief Write a formula to a worksheet cell.
  *
- * @param worksheet pointer to a lxw_worksheet instance to be updated.
+ * @param worksheet Pointer to a lxw_worksheet instance to be updated.
  * @param row       The zero indexed row number.
  * @param col       The zero indexed column number.
  * @param formula   Formula string to write to cell.
@@ -1005,7 +1267,7 @@ lxw_error worksheet_write_formula(lxw_worksheet *worksheet,
 /**
  * @brief Write an array formula to a worksheet cell.
  *
- * @param worksheet pointer to a lxw_worksheet instance to be updated.
+ * @param worksheet Pointer to a lxw_worksheet instance to be updated.
  * @param first_row   The first row of the range. (All zero indexed.)
  * @param first_col   The first column of the range.
  * @param last_row    The last row of the range.
@@ -1064,7 +1326,7 @@ lxw_error worksheet_write_array_formula_num(lxw_worksheet *worksheet,
 /**
  * @brief Write a date or time to a worksheet cell.
  *
- * @param worksheet pointer to a lxw_worksheet instance to be updated.
+ * @param worksheet Pointer to a lxw_worksheet instance to be updated.
  * @param row       The zero indexed row number.
  * @param col       The zero indexed column number.
  * @param datetime  The datetime to write to the cell.
@@ -1093,14 +1355,9 @@ lxw_error worksheet_write_datetime(lxw_worksheet *worksheet,
                                    lxw_col_t col, lxw_datetime *datetime,
                                    lxw_format *format);
 
-lxw_error worksheet_write_url_opt(lxw_worksheet *worksheet,
-                                  lxw_row_t row_num,
-                                  lxw_col_t col_num, const char *url,
-                                  lxw_format *format, const char *string,
-                                  const char *tooltip);
 /**
  *
- * @param worksheet pointer to a lxw_worksheet instance to be updated.
+ * @param worksheet Pointer to a lxw_worksheet instance to be updated.
  * @param row       The zero indexed row number.
  * @param col       The zero indexed column number.
  * @param url       The url to write to the cell.
@@ -1113,21 +1370,22 @@ lxw_error worksheet_write_url_opt(lxw_worksheet *worksheet,
  * worksheet cell specified by `row` and `column`.
  *
  * @code
- *     worksheet_write_url(worksheet, 0, 0, "http://libxlsxwriter.github.io", url_format);
+ *     worksheet_write_url(worksheet, 0, 0, "http://libxlsxwriter.github.io", NULL);
  * @endcode
  *
  * @image html hyperlinks_short.png
  *
  * The `format` parameter is used to apply formatting to the cell. This
- * parameter can be `NULL` to indicate no formatting or it can be a @ref
- * format.h "Format" object. The typical worksheet format for a hyperlink is a
- * blue underline:
+ * parameter can be `NULL`, in which case the default Excel blue underlined
+ * hyperlink style will be used. If required a user defined @ref format.h
+ * "Format" object can be used:
+ * underline:
  *
  * @code
  *    lxw_format *url_format   = workbook_add_format(workbook);
  *
  *    format_set_underline (url_format, LXW_UNDERLINE_SINGLE);
- *    format_set_font_color(url_format, LXW_COLOR_BLUE);
+ *    format_set_font_color(url_format, LXW_COLOR_RED);
  *
  * @endcode
  *
@@ -1135,10 +1393,10 @@ lxw_error worksheet_write_url_opt(lxw_worksheet *worksheet,
  * and `mailto:` :
  *
  * @code
- *     worksheet_write_url(worksheet, 0, 0, "ftp://www.python.org/",     url_format);
- *     worksheet_write_url(worksheet, 1, 0, "http://www.python.org/",    url_format);
- *     worksheet_write_url(worksheet, 2, 0, "https://www.python.org/",   url_format);
- *     worksheet_write_url(worksheet, 3, 0, "mailto:jmcnamara@cpan.org", url_format);
+ *     worksheet_write_url(worksheet, 0, 0, "ftp://www.python.org/",     NULL);
+ *     worksheet_write_url(worksheet, 1, 0, "http://www.python.org/",    NULL);
+ *     worksheet_write_url(worksheet, 2, 0, "https://www.python.org/",   NULL);
+ *     worksheet_write_url(worksheet, 3, 0, "mailto:jmcnamara@cpan.org", NULL);
  *
  * @endcode
  *
@@ -1147,13 +1405,18 @@ lxw_error worksheet_write_url_opt(lxw_worksheet *worksheet,
  * link. However, it is possible to overwrite it with any other
  * `libxlsxwriter` type using the appropriate `worksheet_write_*()`
  * function. The most common case is to overwrite the displayed link text with
- * another string:
+ * another string. To do this we must also match the default URL format using
+ * `workbook_get_default_url_format()`:
  *
  * @code
- *  // Write a hyperlink but overwrite the displayed string.
- *  worksheet_write_url   (worksheet, 2, 0, "http://libxlsxwriter.github.io", url_format);
- *  worksheet_write_string(worksheet, 2, 0, "Read the documentation.",        url_format);
+ *     // Write a hyperlink with the default blue underline format.
+ *     worksheet_write_url(worksheet, 2, 0, "http://libxlsxwriter.github.io", NULL);
  *
+ *     // Get the default url format.
+ *     lxw_format *url_format = workbook_get_default_url_format(workbook);
+ *
+ *     // Overwrite the hyperlink with a user defined string and default format.
+ *     worksheet_write_string(worksheet, 2, 0, "Read the documentation.", url_format);
  * @endcode
  *
  * @image html hyperlinks_short2.png
@@ -1163,15 +1426,15 @@ lxw_error worksheet_write_url_opt(lxw_worksheet *worksheet,
  * worksheet references:
  *
  * @code
- *     worksheet_write_url(worksheet, 0, 0, "internal:Sheet2!A1",                url_format);
- *     worksheet_write_url(worksheet, 1, 0, "internal:Sheet2!B2",                url_format);
- *     worksheet_write_url(worksheet, 2, 0, "internal:Sheet2!A1:B2",             url_format);
- *     worksheet_write_url(worksheet, 3, 0, "internal:'Sales Data'!A1",          url_format);
- *     worksheet_write_url(worksheet, 4, 0, "external:c:\\temp\\foo.xlsx",       url_format);
- *     worksheet_write_url(worksheet, 5, 0, "external:c:\\foo.xlsx#Sheet2!A1",   url_format);
- *     worksheet_write_url(worksheet, 6, 0, "external:..\\foo.xlsx",             url_format);
- *     worksheet_write_url(worksheet, 7, 0, "external:..\\foo.xlsx#Sheet2!A1",   url_format);
- *     worksheet_write_url(worksheet, 8, 0, "external:\\\\NET\\share\\foo.xlsx", url_format);
+ *     worksheet_write_url(worksheet, 0, 0, "internal:Sheet2!A1",                NULL);
+ *     worksheet_write_url(worksheet, 1, 0, "internal:Sheet2!B2",                NULL);
+ *     worksheet_write_url(worksheet, 2, 0, "internal:Sheet2!A1:B2",             NULL);
+ *     worksheet_write_url(worksheet, 3, 0, "internal:'Sales Data'!A1",          NULL);
+ *     worksheet_write_url(worksheet, 4, 0, "external:c:\\temp\\foo.xlsx",       NULL);
+ *     worksheet_write_url(worksheet, 5, 0, "external:c:\\foo.xlsx#Sheet2!A1",   NULL);
+ *     worksheet_write_url(worksheet, 6, 0, "external:..\\foo.xlsx",             NULL);
+ *     worksheet_write_url(worksheet, 7, 0, "external:..\\foo.xlsx#Sheet2!A1",   NULL);
+ *     worksheet_write_url(worksheet, 8, 0, "external:\\\\NET\\share\\foo.xlsx", NULL);
  *
  * @endcode
  *
@@ -1183,7 +1446,7 @@ lxw_error worksheet_write_url_opt(lxw_worksheet *worksheet,
  * `#` character:
  *
  * @code
- *     worksheet_write_url(worksheet, 0, 0, "external:c:\\foo.xlsx#Sheet2!A1",   url_format);
+ *     worksheet_write_url(worksheet, 0, 0, "external:c:\\foo.xlsx#Sheet2!A1",   NULL);
  * @endcode
  *
  * You can also link to a named range in the target worksheet: For example say
@@ -1191,7 +1454,7 @@ lxw_error worksheet_write_url_opt(lxw_worksheet *worksheet,
  * you could link to it as follows:
  *
  * @code
- *     worksheet_write_url(worksheet, 0, 0, "external:c:\\temp\\foo.xlsx#my_name", url_format);
+ *     worksheet_write_url(worksheet, 0, 0, "external:c:\\temp\\foo.xlsx#my_name", NULL);
  *
  * @endcode
  *
@@ -1199,14 +1462,14 @@ lxw_error worksheet_write_url_opt(lxw_worksheet *worksheet,
  * characters are single quoted as follows:
  *
  * @code
- *     worksheet_write_url(worksheet, 0, 0, "internal:'Sales Data'!A1", url_format);
+ *     worksheet_write_url(worksheet, 0, 0, "internal:'Sales Data'!A1", NULL);
  * @endcode
  *
  * Links to network files are also supported. Network files normally begin
  * with two back slashes as follows `\\NETWORK\etc`. In order to represent
  * this in a C string literal the backslashes should be escaped:
  * @code
- *     worksheet_write_url(worksheet, 0, 0, "external:\\\\NET\\share\\foo.xlsx", url_format);
+ *     worksheet_write_url(worksheet, 0, 0, "external:\\\\NET\\share\\foo.xlsx", NULL);
  * @endcode
  *
  *
@@ -1214,8 +1477,8 @@ lxw_error worksheet_write_url_opt(lxw_worksheet *worksheet,
  * translated internally to backslashes:
  *
  * @code
- *     worksheet_write_url(worksheet, 0, 0, "external:c:/temp/foo.xlsx",     url_format);
- *     worksheet_write_url(worksheet, 1, 0, "external://NET/share/foo.xlsx", url_format);
+ *     worksheet_write_url(worksheet, 0, 0, "external:c:/temp/foo.xlsx",     NULL);
+ *     worksheet_write_url(worksheet, 1, 0, "external://NET/share/foo.xlsx", NULL);
  *
  * @endcode
  *
@@ -1223,20 +1486,33 @@ lxw_error worksheet_write_url_opt(lxw_worksheet *worksheet,
  * **Note:**
  *
  *    libxlsxwriter will escape the following characters in URLs as required
- *    by Excel: `\s " < > \ [ ]  ^ { }` unless the URL already contains `%%xx`
- *    style escapes. In which case it is assumed that the URL was escaped
- *    correctly by the user and will by passed directly to Excel.
+ *    by Excel: `\s " < > \ [ ]  ^ { }`. Existing URL `%%xx` style escapes in
+ *    the string are ignored to allow for user-escaped strings.
  *
+ * **Note:**
+ *
+ *    The maximum allowable URL length in recent versions of Excel is 2079
+ *    characters. In older versions of Excel (and libxlsxwriter <= 0.8.8) the
+ *    limit was 255 characters.
  */
 lxw_error worksheet_write_url(lxw_worksheet *worksheet,
                               lxw_row_t row,
                               lxw_col_t col, const char *url,
                               lxw_format *format);
 
+ /* Don't document for now since the string option can be achieved by a
+  * subsequent cell worksheet_write() as shown in the docs, and the
+  * tooltip option isn't very useful. */
+lxw_error worksheet_write_url_opt(lxw_worksheet *worksheet,
+                                  lxw_row_t row_num,
+                                  lxw_col_t col_num, const char *url,
+                                  lxw_format *format, const char *string,
+                                  const char *tooltip);
+
 /**
  * @brief Write a formatted boolean worksheet cell.
  *
- * @param worksheet pointer to a lxw_worksheet instance to be updated.
+ * @param worksheet Pointer to a lxw_worksheet instance to be updated.
  * @param row       The zero indexed row number.
  * @param col       The zero indexed column number.
  * @param value     The boolean value to write to the cell.
@@ -1258,7 +1534,7 @@ lxw_error worksheet_write_boolean(lxw_worksheet *worksheet,
 /**
  * @brief Write a formatted blank worksheet cell.
  *
- * @param worksheet pointer to a lxw_worksheet instance to be updated.
+ * @param worksheet Pointer to a lxw_worksheet instance to be updated.
  * @param row       The zero indexed row number.
  * @param col       The zero indexed column number.
  * @param format    A pointer to a Format instance or NULL.
@@ -1289,7 +1565,7 @@ lxw_error worksheet_write_blank(lxw_worksheet *worksheet,
 /**
  * @brief Write a formula to a worksheet cell with a user defined result.
  *
- * @param worksheet pointer to a lxw_worksheet instance to be updated.
+ * @param worksheet Pointer to a lxw_worksheet instance to be updated.
  * @param row       The zero indexed row number.
  * @param col       The zero indexed column number.
  * @param formula   Formula string to write to cell.
@@ -1338,7 +1614,7 @@ lxw_error worksheet_write_formula_num(lxw_worksheet *worksheet,
 /**
  * @brief Write a "Rich" multi-format string to a worksheet cell.
  *
- * @param worksheet   pointer to a lxw_worksheet instance to be updated.
+ * @param worksheet   Pointer to a lxw_worksheet instance to be updated.
  * @param row         The zero indexed row number.
  * @param col         The zero indexed column number.
  * @param rich_string An array of format/string lxw_rich_string_tuple fragments.
@@ -1409,6 +1685,88 @@ lxw_error worksheet_write_rich_string(lxw_worksheet *worksheet,
                                       lxw_col_t col,
                                       lxw_rich_string_tuple *rich_string[],
                                       lxw_format *format);
+
+/**
+ * @brief Write a comment to a worksheet cell.
+ *
+ * @param worksheet   Pointer to a lxw_worksheet instance to be updated.
+ * @param row         The zero indexed row number.
+ * @param col         The zero indexed column number.
+ * @param string      The comment string to be written.
+ *
+ * @return A #lxw_error code.
+ *
+ * The `%worksheet_write_comment()` function is used to add a comment to a
+ * cell. A comment is indicated in Excel by a small red triangle in the upper
+ * right-hand corner of the cell. Moving the cursor over the red triangle will
+ * reveal the comment.
+ *
+ * The following example shows how to add a comment to a cell:
+ *
+ * @code
+ *     worksheet_write_comment(worksheet, 0, 0, "This is a comment");
+ * @endcode
+ *
+ * @image html comments1.png
+ *
+ * See also @ref working_with_comments
+ *
+ */
+lxw_error worksheet_write_comment(lxw_worksheet *worksheet,
+                                  lxw_row_t row, lxw_col_t col,
+                                  const char *string);
+
+/**
+ * @brief Write a comment to a worksheet cell with options.
+ *
+ * @param worksheet   Pointer to a lxw_worksheet instance to be updated.
+ * @param row         The zero indexed row number.
+ * @param col         The zero indexed column number.
+ * @param string      The comment string to be written.
+ * @param options     #lxw_comment_options to control position and format
+ *                    of the comment.
+ *
+ * @return A #lxw_error code.
+ *
+ * The `%worksheet_write_comment_opt()` function is used to add a comment to a
+ * cell with option that control the position, format and metadata of the
+ * comment. A comment is indicated in Excel by a small red triangle in the
+ * upper right-hand corner of the cell. Moving the cursor over the red
+ * triangle will reveal the comment.
+ *
+ * The following example shows how to add a comment to a cell with options:
+ *
+ * @code
+ *     lxw_comment_options options = {.visible = LXW_COMMENT_DISPLAY_VISIBLE};
+ *
+ *     worksheet_write_comment_opt(worksheet, CELL("C6"), "Hello.", &options);
+ * @endcode
+ *
+ * The following options are available in #lxw_comment_options:
+ *
+ * - `author`
+ * - `visible`
+ * - `width`
+ * - `height`
+ * - `x_scale`
+ * - `y_scale`
+ * - `color`
+ * - `font_name`
+ * - `font_size`
+ * - `start_row`
+ * - `start_col`
+ * - `x_offset`
+ * - `y_offset`
+ *
+ * @image html comments2.png
+ *
+ * Comment options are explained in detail in the @ref ww_comments_properties
+ * section of the docs.
+ */
+lxw_error worksheet_write_comment_opt(lxw_worksheet *worksheet,
+                                      lxw_row_t row, lxw_col_t col,
+                                      const char *string,
+                                      lxw_comment_options *options);
 
 /**
  * @brief Set the properties for a row of cells.
@@ -1732,14 +2090,36 @@ lxw_error worksheet_insert_image(lxw_worksheet *worksheet,
  * #lxw_image_options struct to scale and position the image:
  *
  * @code
- *    lxw_image_options options = {.x_offset = 30,  .y_offset = 10,
+ *     lxw_image_options options = {.x_offset = 30,  .y_offset = 10,
  *                                 .x_scale  = 0.5, .y_scale  = 0.5};
  *
- *    worksheet_insert_image_opt(worksheet, 2, 1, "logo.png", &options);
+ *     worksheet_insert_image_opt(worksheet, 2, 1, "logo.png", &options);
  *
  * @endcode
  *
  * @image html insert_image_opt.png
+ *
+ * The `url` field of lxw_image_options can be use to used to add a hyperlink
+ * to an image:
+ *
+ * @code
+ *     lxw_image_options options = {.url = "https://github.com/jmcnamara"};
+ *
+ *     worksheet_insert_image_opt(worksheet, 3, 1, "logo.png", &options);
+ * @endcode
+ *
+ * The supported URL formats are the same as those supported by the
+ * `worksheet_write_url()` method and the same rules/limits apply.
+ *
+ * The `tip` field of lxw_image_options can be use to used to add a mouseover
+ * tip to the hyperlink:
+ *
+ * @code
+ *      lxw_image_options options = {.url = "https://github.com/jmcnamara",
+                                     .tip = "GitHub"};
+ *
+ *     worksheet_insert_image_opt(worksheet, 4, 1, "logo.png", &options);
+ * @endcode
  *
  * @note See the notes about row scaling and BMP images in
  * `worksheet_insert_image()` above.
@@ -1871,10 +2251,10 @@ lxw_error worksheet_insert_chart(lxw_worksheet *worksheet,
  *
  * The `%worksheet_insert_chart_opt()` function is like
  * `worksheet_insert_chart()` function except that it takes an optional
- * #lxw_image_options struct to scale and position the image of the chart:
+ * #lxw_chart_options struct to scale and position the chart:
  *
  * @code
- *    lxw_image_options options = {.x_offset = 30,  .y_offset = 10,
+ *    lxw_chart_options options = {.x_offset = 30,  .y_offset = 10,
  *                                 .x_scale  = 0.5, .y_scale  = 0.75};
  *
  *    worksheet_insert_chart_opt(worksheet, 0, 2, chart, &options);
@@ -1883,14 +2263,11 @@ lxw_error worksheet_insert_chart(lxw_worksheet *worksheet,
  *
  * @image html chart_line_opt.png
  *
- * The #lxw_image_options struct is the same struct used in
- * `worksheet_insert_image_opt()` to position and scale images.
- *
  */
 lxw_error worksheet_insert_chart_opt(lxw_worksheet *worksheet,
                                      lxw_row_t row, lxw_col_t col,
                                      lxw_chart *chart,
-                                     lxw_image_options *user_options);
+                                     lxw_chart_options *user_options);
 
 /**
  * @brief Merge a range of cells.
@@ -2251,7 +2628,7 @@ void worksheet_split_panes_opt(lxw_worksheet *worksheet,
 /**
  * @brief Set the selected cell or cells in a worksheet:
  *
- * @param worksheet   Pointer to a lxw_worksheet instance to be updated.
+ * @param worksheet   A pointer to a lxw_worksheet instance to be updated.
  * @param first_row   The first row of the range. (All zero indexed.)
  * @param first_col   The first column of the range.
  * @param last_row    The last row of the range.
@@ -3261,6 +3638,44 @@ void worksheet_set_default_row(lxw_worksheet *worksheet, double height,
  */
 lxw_error worksheet_set_vba_name(lxw_worksheet *worksheet, const char *name);
 
+/**
+ * @brief Make all comments in the worksheet visible.
+ *
+ * @param worksheet Pointer to a lxw_worksheet instance.
+ *
+ * This `%worksheet_show_comments()` function is used to make all cell
+ * comments visible when a worksheet is opened:
+ *
+ * @code
+ *     worksheet_show_comments(worksheet);
+ * @endcode
+ *
+ * Individual comments can be made visible or hidden using the `visible`
+ * option of the #lxw_comment_options struct and the `worksheet_write_comment_opt()`
+ * function (see above and @ref ww_comments_visible).
+ */
+void worksheet_show_comments(lxw_worksheet *worksheet);
+
+/**
+ * @brief Set the default author of the cell comments.
+ *
+ * @param worksheet Pointer to a lxw_worksheet instance.
+ * @param author    The name of the comment author.
+ *
+ * This `%worksheet_set_comments_author()` function is used to set the
+ * default author of all cell comments:
+ *
+ * @code
+ *     worksheet_set_comments_author(worksheet, "Jane Gloriana Villanueva")
+ * @endcode
+ *
+ * Individual authors can be set using the `author` option of the
+ * #lxw_comment_options struct and the `worksheet_write_comment_opt()`
+ * function (see above and @ref ww_comments_author).
+ */
+void worksheet_set_comments_author(lxw_worksheet *worksheet,
+                                   const char *author);
+
 lxw_worksheet *lxw_worksheet_new(lxw_worksheet_init_data *init_data);
 void lxw_worksheet_free(lxw_worksheet *worksheet);
 void lxw_worksheet_assemble_xml_file(lxw_worksheet *worksheet);
@@ -3268,16 +3683,21 @@ void lxw_worksheet_write_single_row(lxw_worksheet *worksheet);
 
 void lxw_worksheet_prepare_image(lxw_worksheet *worksheet,
                                  uint32_t image_ref_id, uint32_t drawing_id,
-                                 lxw_image_options *image_data);
+                                 lxw_object_properties *object_props);
 
 void lxw_worksheet_prepare_chart(lxw_worksheet *worksheet,
                                  uint32_t chart_ref_id, uint32_t drawing_id,
-                                 lxw_image_options *image_data,
+                                 lxw_object_properties *object_props,
                                  uint8_t is_chartsheet);
 
-lxw_row *lxw_worksheet_find_row(lxw_worksheet *worksheet, lxw_row_t row_num);
-lxw_cell *lxw_worksheet_find_cell(lxw_row *row, lxw_col_t col_num);
+uint32_t lxw_worksheet_prepare_vml_objects(lxw_worksheet *worksheet,
+                                           uint32_t vml_data_id,
+                                           uint32_t vml_shape_id,
+                                           uint32_t vml_drawing_id,
+                                           uint32_t comment_id);
 
+lxw_row *lxw_worksheet_find_row(lxw_worksheet *worksheet, lxw_row_t row_num);
+lxw_cell *lxw_worksheet_find_cell_in_row(lxw_row *row, lxw_col_t col_num);
 /*
  * External functions to call intern XML methods shared with chartsheet.
  */
@@ -3285,7 +3705,7 @@ void lxw_worksheet_write_sheet_views(lxw_worksheet *worksheet);
 void lxw_worksheet_write_page_margins(lxw_worksheet *worksheet);
 void lxw_worksheet_write_drawings(lxw_worksheet *worksheet);
 void lxw_worksheet_write_sheet_protection(lxw_worksheet *worksheet,
-                                          lxw_protection *protect);
+                                          lxw_protection_obj *protect);
 void lxw_worksheet_write_sheet_pr(lxw_worksheet *worksheet);
 void lxw_worksheet_write_page_setup(lxw_worksheet *worksheet);
 void lxw_worksheet_write_header_footer(lxw_worksheet *worksheet);
@@ -3320,7 +3740,7 @@ STATIC void _worksheet_write_print_options(lxw_worksheet *worksheet);
 STATIC void _worksheet_write_sheet_pr(lxw_worksheet *worksheet);
 STATIC void _worksheet_write_tab_color(lxw_worksheet *worksheet);
 STATIC void _worksheet_write_sheet_protection(lxw_worksheet *worksheet,
-                                              lxw_protection *protect);
+                                              lxw_protection_obj *protect);
 STATIC void _worksheet_write_data_validations(lxw_worksheet *self);
 #endif /* TESTING */
 

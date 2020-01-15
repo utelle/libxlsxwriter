@@ -3,7 +3,7 @@
  *
  * Used in conjunction with the libxlsxwriter library.
  *
- * Copyright 2014-2019, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
+ * Copyright 2014-2020, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
  *
  */
 
@@ -247,7 +247,7 @@ _write_image_files(lxw_packager *self)
     lxw_workbook *workbook = self->workbook;
     lxw_sheet *sheet;
     lxw_worksheet *worksheet;
-    lxw_image_options *image;
+    lxw_object_properties *object_props;
     lxw_error err;
     FILE *image_stream;
 
@@ -260,21 +260,25 @@ _write_image_files(lxw_packager *self)
         else
             worksheet = sheet->u.worksheet;
 
-        if (STAILQ_EMPTY(worksheet->image_data))
+        if (STAILQ_EMPTY(worksheet->image_props))
             continue;
 
-        STAILQ_FOREACH(image, worksheet->image_data, list_pointers) {
+        STAILQ_FOREACH(object_props, worksheet->image_props, list_pointers) {
+
+            if (object_props->is_duplicate)
+                continue;
 
             lxw_snprintf(filename, LXW_FILENAME_LENGTH,
-                         "xl/media/image%d.%s", index++, image->extension);
+                         "xl/media/image%d.%s", index++,
+                         object_props->extension);
 
-            if (!image->is_image_buffer) {
+            if (!object_props->is_image_buffer) {
                 /* Check that the image file exists and can be opened. */
-                image_stream = fopen(image->filename, "rb");
+                image_stream = lxw_fopen(object_props->filename, "rb");
                 if (!image_stream) {
                     LXW_WARN_FORMAT1("Error adding image to xlsx file: file "
                                      "doesn't exist or can't be opened: %s.",
-                                     image->filename);
+                                     object_props->filename);
                     return LXW_ERROR_CREATING_TMPFILE;
                 }
 
@@ -283,8 +287,9 @@ _write_image_files(lxw_packager *self)
             }
             else {
                 err = _add_buffer_to_zip(self,
-                                         image->image_buffer,
-                                         image->image_buffer_size, filename);
+                                         object_props->image_buffer,
+                                         object_props->image_buffer_size,
+                                         filename);
             }
 
             RETURN_ON_ERROR(err);
@@ -308,7 +313,7 @@ _add_vba_project(lxw_packager *self)
         return LXW_NO_ERROR;
 
     /* Check that the image file exists and can be opened. */
-    image_stream = fopen(workbook->vba_project, "rb");
+    image_stream = lxw_fopen(workbook->vba_project, "rb");
     if (!image_stream) {
         LXW_WARN_FORMAT1("Error adding vbaProject.bin to xlsx file: "
                          "file doesn't exist or can't be opened: %s.",
@@ -438,6 +443,120 @@ _get_drawing_count(lxw_packager *self)
     }
 
     return drawing_count;
+}
+
+/*
+ * Write the comment/header VML files.
+ */
+STATIC lxw_error
+_write_vml_files(lxw_packager *self)
+{
+    lxw_workbook *workbook = self->workbook;
+    lxw_sheet *sheet;
+    lxw_worksheet *worksheet;
+    lxw_vml *vml;
+    char filename[LXW_FILENAME_LENGTH] = { 0 };
+    uint32_t index = 1;
+    lxw_error err;
+
+    STAILQ_FOREACH(sheet, workbook->sheets, list_pointers) {
+        if (sheet->is_chartsheet)
+            continue;
+        else
+            worksheet = sheet->u.worksheet;
+
+        if (!worksheet->has_vml)
+            continue;
+
+        vml = lxw_vml_new();
+        if (!vml)
+            return LXW_ERROR_MEMORY_MALLOC_FAILED;
+
+        lxw_snprintf(filename, LXW_FILENAME_LENGTH,
+                     "xl/drawings/vmlDrawing%d.vml", index++);
+
+        vml->file = lxw_tmpfile(self->tmpdir);
+        if (!vml->file) {
+            lxw_vml_free(vml);
+            return LXW_ERROR_CREATING_TMPFILE;
+        }
+
+        vml->comment_objs = worksheet->comment_objs;
+        vml->vml_shape_id = worksheet->vml_shape_id;
+        vml->comment_display_default = worksheet->comment_display_default;
+
+        if (worksheet->vml_data_id_str) {
+            vml->vml_data_id_str = worksheet->vml_data_id_str;
+        }
+        else {
+            fclose(vml->file);
+            lxw_vml_free(vml);
+            return LXW_ERROR_MEMORY_MALLOC_FAILED;
+        }
+
+        lxw_vml_assemble_xml_file(vml);
+
+        err = _add_file_to_zip(self, vml->file, filename);
+
+        fclose(vml->file);
+        lxw_vml_free(vml);
+
+        RETURN_ON_ERROR(err);
+    }
+
+    return LXW_NO_ERROR;
+}
+
+/*
+ * Write the comment files.
+ */
+STATIC lxw_error
+_write_comment_files(lxw_packager *self)
+{
+    lxw_workbook *workbook = self->workbook;
+    lxw_sheet *sheet;
+    lxw_worksheet *worksheet;
+    lxw_comment *comment;
+    char filename[LXW_FILENAME_LENGTH] = { 0 };
+    uint32_t index = 1;
+    lxw_error err;
+
+    STAILQ_FOREACH(sheet, workbook->sheets, list_pointers) {
+        if (sheet->is_chartsheet)
+            continue;
+        else
+            worksheet = sheet->u.worksheet;
+
+        if (!worksheet->has_comments)
+            continue;
+
+        comment = lxw_comment_new();
+        if (!comment)
+            return LXW_ERROR_MEMORY_MALLOC_FAILED;
+
+        lxw_snprintf(filename, LXW_FILENAME_LENGTH,
+                     "xl/comments%d.xml", index++);
+
+        comment->file = lxw_tmpfile(self->tmpdir);
+        if (!comment->file) {
+            lxw_comment_free(comment);
+            return LXW_ERROR_CREATING_TMPFILE;
+        }
+
+        comment->comment_objs = worksheet->comment_objs;
+        comment->comment_author = worksheet->comment_author;
+
+        lxw_comment_assemble_xml_file(comment);
+
+        err = _add_file_to_zip(self, comment->file, filename);
+
+        fclose(comment->file);
+        lxw_comment_free(comment);
+
+        RETURN_ON_ERROR(err);
+    }
+
+    return LXW_NO_ERROR;
 }
 
 /*
@@ -695,6 +814,7 @@ _write_styles_file(lxw_packager *self)
     styles->fill_count = self->workbook->fill_count;
     styles->num_format_count = self->workbook->num_format_count;
     styles->xf_count = self->workbook->used_xf_formats->unique_count;
+    styles->has_comments = self->workbook->has_comments;
 
     styles->file = lxw_tmpfile(self->tmpdir);
     if (!styles->file) {
@@ -785,6 +905,15 @@ _write_content_types_file(lxw_packager *self)
         lxw_snprintf(filename, LXW_FILENAME_LENGTH,
                      "/xl/drawings/drawing%d.xml", index);
         lxw_ct_add_drawing_name(content_types, filename);
+    }
+
+    if (workbook->has_vml)
+        lxw_ct_add_vml_name(content_types);
+
+    for (index = 1; index <= workbook->comment_count; index++) {
+        lxw_snprintf(filename, LXW_FILENAME_LENGTH,
+                     "/xl/comments%d.xml", index);
+        lxw_ct_add_comment_name(content_types, filename);
     }
 
     if (workbook->sst->string_count)
@@ -893,7 +1022,9 @@ _write_worksheet_rels_file(lxw_packager *self)
         index++;
 
         if (STAILQ_EMPTY(worksheet->external_hyperlinks) &&
-            STAILQ_EMPTY(worksheet->external_drawing_links))
+            STAILQ_EMPTY(worksheet->external_drawing_links) &&
+            !worksheet->external_vml_comment_link &&
+            !worksheet->external_comment_link)
             continue;
 
         rels = lxw_relationships_new();
@@ -913,6 +1044,16 @@ _write_worksheet_rels_file(lxw_packager *self)
             lxw_add_worksheet_relationship(rels, rel->type, rel->target,
                                            rel->target_mode);
         }
+
+        rel = worksheet->external_vml_comment_link;
+        if (rel)
+            lxw_add_worksheet_relationship(rels, rel->type, rel->target,
+                                           rel->target_mode);
+
+        rel = worksheet->external_comment_link;
+        if (rel)
+            lxw_add_worksheet_relationship(rels, rel->type, rel->target,
+                                           rel->target_mode);
 
         lxw_snprintf(sheetname, LXW_FILENAME_LENGTH,
                      "xl/worksheets/_rels/sheet%d.xml.rels", index);
@@ -1221,6 +1362,12 @@ lxw_create_package(lxw_packager *self)
     RETURN_ON_ERROR(error);
 
     error = _write_drawing_files(self);
+    RETURN_ON_ERROR(error);
+
+    error = _write_vml_files(self);
+    RETURN_ON_ERROR(error);
+
+    error = _write_comment_files(self);
     RETURN_ON_ERROR(error);
 
     error = _write_shared_strings_file(self);

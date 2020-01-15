@@ -3,7 +3,7 @@
  *
  * Used in conjunction with the libxlsxwriter library.
  *
- * Copyright 2014-2019, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
+ * Copyright 2014-2020, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
  *
  */
 
@@ -17,11 +17,15 @@ STATIC int _worksheet_name_cmp(lxw_worksheet_name *name1,
                                lxw_worksheet_name *name2);
 STATIC int _chartsheet_name_cmp(lxw_chartsheet_name *name1,
                                 lxw_chartsheet_name *name2);
+STATIC int _image_md5_cmp(lxw_image_md5 *tuple1, lxw_image_md5 *tuple2);
+
 #ifndef __clang_analyzer__
 LXW_RB_GENERATE_WORKSHEET_NAMES(lxw_worksheet_names, lxw_worksheet_name,
                                 tree_pointers, _worksheet_name_cmp);
 LXW_RB_GENERATE_CHARTSHEET_NAMES(lxw_chartsheet_names, lxw_chartsheet_name,
                                  tree_pointers, _chartsheet_name_cmp);
+LXW_RB_GENERATE_IMAGE_MD5S(lxw_image_md5s, lxw_image_md5,
+                           tree_pointers, _image_md5_cmp);
 #endif
 
 /*
@@ -47,6 +51,12 @@ STATIC int
 _chartsheet_name_cmp(lxw_chartsheet_name *name1, lxw_chartsheet_name *name2)
 {
     return lxw_strcasecmp(name1->name, name2->name);
+}
+
+STATIC int
+_image_md5_cmp(lxw_image_md5 *tuple1, lxw_image_md5 *tuple2)
+{
+    return strcmp(tuple1->md5, tuple2->md5);
 }
 
 /*
@@ -97,6 +107,8 @@ lxw_workbook_free(lxw_workbook *workbook)
     struct lxw_worksheet_name *next_worksheet_name;
     struct lxw_chartsheet_name *chartsheet_name;
     struct lxw_chartsheet_name *next_chartsheet_name;
+    struct lxw_image_md5 *image_md5;
+    struct lxw_image_md5 *next_image_md5;
     lxw_chart *chart;
     lxw_format *format;
     lxw_defined_name *defined_name;
@@ -204,6 +216,20 @@ lxw_workbook_free(lxw_workbook *workbook)
         free(workbook->chartsheet_names);
     }
 
+    if (workbook->image_md5s) {
+        for (image_md5 = RB_MIN(lxw_image_md5s, workbook->image_md5s);
+             image_md5; image_md5 = next_image_md5) {
+
+            next_image_md5 =
+                RB_NEXT(lxw_image_md5s, workbook->image_md5, image_md5);
+            RB_REMOVE(lxw_image_md5s, workbook->image_md5s, image_md5);
+            free(image_md5->md5);
+            free(image_md5);
+        }
+
+        free(workbook->image_md5s);
+    }
+
     lxw_hash_free(workbook->used_xf_formats);
     lxw_sst_free(workbook->sst);
     free(workbook->options.tmpdir);
@@ -220,9 +246,15 @@ void
 lxw_workbook_set_default_xf_indices(lxw_workbook *self)
 {
     lxw_format *format;
+    int32_t index = 0;
 
     STAILQ_FOREACH(format, self->formats, list_pointers) {
-        lxw_format_get_xf_index(format);
+
+        /* Skip the hyperlink format. */
+        if (index != 1)
+            lxw_format_get_xf_index(format);
+
+        index++;
     }
 }
 
@@ -735,7 +767,7 @@ _populate_range_data_cache(lxw_workbook *self, lxw_series_range *range)
                 return;
             }
 
-            cell_obj = lxw_worksheet_find_cell(row_obj, col_num);
+            cell_obj = lxw_worksheet_find_cell_in_row(row_obj, col_num);
 
             if (cell_obj) {
                 if (cell_obj->type == NUMBER_CELL) {
@@ -886,11 +918,15 @@ _prepare_drawings(lxw_workbook *self)
 {
     lxw_sheet *sheet;
     lxw_worksheet *worksheet;
-    lxw_image_options *image_options;
+    lxw_object_properties *object_props;
     uint32_t chart_ref_id = 0;
     uint32_t image_ref_id = 0;
+    uint32_t ref_id = 0;
     uint32_t drawing_id = 0;
     uint8_t is_chartsheet;
+    lxw_image_md5 tmp_image_md5;
+    lxw_image_md5 *new_image_md5 = NULL;
+    lxw_image_md5 *found_duplicate_image = NULL;
 
     STAILQ_FOREACH(sheet, self->sheets, list_pointers) {
         if (sheet->is_chartsheet) {
@@ -902,40 +938,114 @@ _prepare_drawings(lxw_workbook *self)
             is_chartsheet = LXW_FALSE;
         }
 
-        if (STAILQ_EMPTY(worksheet->image_data)
+        if (STAILQ_EMPTY(worksheet->image_props)
             && STAILQ_EMPTY(worksheet->chart_data))
             continue;
 
         drawing_id++;
 
-        STAILQ_FOREACH(image_options, worksheet->chart_data, list_pointers) {
-            chart_ref_id++;
-            lxw_worksheet_prepare_chart(worksheet, chart_ref_id, drawing_id,
-                                        image_options, is_chartsheet);
-            if (image_options->chart)
-                STAILQ_INSERT_TAIL(self->ordered_charts, image_options->chart,
-                                   ordered_list_pointers);
-        }
+        STAILQ_FOREACH(object_props, worksheet->image_props, list_pointers) {
 
-        STAILQ_FOREACH(image_options, worksheet->image_data, list_pointers) {
-
-            if (image_options->image_type == LXW_IMAGE_PNG)
+            if (object_props->image_type == LXW_IMAGE_PNG)
                 self->has_png = LXW_TRUE;
 
-            if (image_options->image_type == LXW_IMAGE_JPEG)
+            if (object_props->image_type == LXW_IMAGE_JPEG)
                 self->has_jpeg = LXW_TRUE;
 
-            if (image_options->image_type == LXW_IMAGE_BMP)
+            if (object_props->image_type == LXW_IMAGE_BMP)
                 self->has_bmp = LXW_TRUE;
 
-            image_ref_id++;
+            /* Check for duplicate images and only store the first instance. */
+            if (object_props->md5) {
+                tmp_image_md5.md5 = object_props->md5;
+                found_duplicate_image = RB_FIND(lxw_image_md5s,
+                                                self->image_md5s,
+                                                &tmp_image_md5);
+            }
 
-            lxw_worksheet_prepare_image(worksheet, image_ref_id, drawing_id,
-                                        image_options);
+            if (found_duplicate_image) {
+                ref_id = found_duplicate_image->id;
+                object_props->is_duplicate = LXW_TRUE;
+            }
+            else {
+                image_ref_id++;
+                ref_id = image_ref_id;
+
+#ifndef USE_NO_MD5
+                new_image_md5 = calloc(1, sizeof(lxw_image_md5));
+#endif
+                if (new_image_md5 && object_props->md5) {
+                    new_image_md5->id = ref_id;
+                    new_image_md5->md5 = lxw_strdup(object_props->md5);
+
+                    RB_INSERT(lxw_image_md5s, self->image_md5s,
+                              new_image_md5);
+                }
+            }
+
+            lxw_worksheet_prepare_image(worksheet, ref_id, drawing_id,
+                                        object_props);
+        }
+
+        STAILQ_FOREACH(object_props, worksheet->chart_data, list_pointers) {
+            chart_ref_id++;
+            lxw_worksheet_prepare_chart(worksheet, chart_ref_id, drawing_id,
+                                        object_props, is_chartsheet);
+            if (object_props->chart)
+                STAILQ_INSERT_TAIL(self->ordered_charts, object_props->chart,
+                                   ordered_list_pointers);
         }
     }
 
     self->drawing_count = drawing_id;
+}
+
+/*
+ * Iterate through the worksheets and set up the VML objects.
+ */
+
+STATIC void
+_prepare_vml(lxw_workbook *self)
+{
+    lxw_worksheet *worksheet;
+    lxw_sheet *sheet;
+    uint32_t comment_id = 0;
+    uint32_t vml_drawing_id = 0;
+    uint32_t vml_data_id = 1;
+    uint32_t vml_shape_id = 1024;
+    uint32_t comment_count = 0;
+
+    STAILQ_FOREACH(sheet, self->sheets, list_pointers) {
+        if (sheet->is_chartsheet)
+            continue;
+        else
+            worksheet = sheet->u.worksheet;
+
+        if (!worksheet->has_vml && !worksheet->has_header_vml)
+            continue;
+
+        if (worksheet->has_vml) {
+            self->has_vml = LXW_TRUE;
+            if (worksheet->has_comments) {
+                self->comment_count += 1;
+                comment_id += 1;
+                self->has_comments = LXW_TRUE;
+            }
+
+            vml_drawing_id += 1;
+
+            comment_count = lxw_worksheet_prepare_vml_objects(worksheet,
+                                                              vml_data_id,
+                                                              vml_shape_id,
+                                                              vml_drawing_id,
+                                                              comment_id);
+
+            /* Each VML should start with a shape id incremented by 1024. */
+            vml_data_id += 1 * ((1024 + comment_count) / 1024);
+            vml_shape_id += 1024 * ((1024 + comment_count) / 1024);
+
+        }
+    }
 }
 
 /*
@@ -1432,6 +1542,11 @@ workbook_new_opt(const char *filename, lxw_workbook_options *options)
     GOTO_LABEL_ON_MEM_ERROR(workbook->chartsheet_names, mem_error);
     RB_INIT(workbook->chartsheet_names);
 
+    /* Add the image MD5 tree. */
+    workbook->image_md5s = calloc(1, sizeof(struct lxw_image_md5s));
+    GOTO_LABEL_ON_MEM_ERROR(workbook->image_md5s, mem_error);
+    RB_INIT(workbook->image_md5s);
+
     /* Add the charts list. */
     workbook->charts = calloc(1, sizeof(struct lxw_charts));
     GOTO_LABEL_ON_MEM_ERROR(workbook->charts, mem_error);
@@ -1477,11 +1592,19 @@ workbook_new_opt(const char *filename, lxw_workbook_options *options)
     /* Initialize its index. */
     lxw_format_get_xf_index(format);
 
+    /* Add the default hyperlink format. */
+    format = workbook_add_format(workbook);
+    GOTO_LABEL_ON_MEM_ERROR(format, mem_error);
+    format_set_hyperlink(format);
+    workbook->default_url_format = format;
+
     if (options) {
         workbook->options.constant_memory = options->constant_memory;
         workbook->options.tmpdir = lxw_strdup(options->tmpdir);
         workbook->options.use_zip64 = options->use_zip64;
     }
+
+    workbook->max_url_length = 2079;
 
     return workbook;
 
@@ -1501,7 +1624,7 @@ workbook_add_worksheet(lxw_workbook *self, const char *sheetname)
     lxw_worksheet *worksheet = NULL;
     lxw_worksheet_name *worksheet_name = NULL;
     lxw_error error;
-    lxw_worksheet_init_data init_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    lxw_worksheet_init_data init_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     char *new_name = NULL;
 
     if (sheetname) {
@@ -1540,6 +1663,8 @@ workbook_add_worksheet(lxw_workbook *self, const char *sheetname)
     init_data.active_sheet = &self->active_sheet;
     init_data.first_sheet = &self->first_sheet;
     init_data.tmpdir = self->options.tmpdir;
+    init_data.default_url_format = self->default_url_format;
+    init_data.max_url_length = self->max_url_length;
 
     /* Create a new worksheet object. */
     worksheet = lxw_worksheet_new(&init_data);
@@ -1583,7 +1708,7 @@ workbook_add_chartsheet(lxw_workbook *self, const char *sheetname)
     lxw_chartsheet *chartsheet = NULL;
     lxw_chartsheet_name *chartsheet_name = NULL;
     lxw_error error;
-    lxw_worksheet_init_data init_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    lxw_worksheet_init_data init_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     char *new_name = NULL;
 
     if (sheetname) {
@@ -1702,6 +1827,7 @@ workbook_close(lxw_workbook *self)
     lxw_worksheet *worksheet = NULL;
     lxw_packager *packager = NULL;
     lxw_error error = LXW_NO_ERROR;
+    char codename[LXW_MAX_SHEETNAME_LENGTH] = { 0 };
 
     /* Add a default worksheet if non have been added. */
     if (!self->num_sheets)
@@ -1739,10 +1865,17 @@ workbook_close(lxw_workbook *self)
             else
                 worksheet = sheet->u.worksheet;
 
-            if (!worksheet->vba_codename)
-                worksheet_set_vba_name(worksheet, worksheet->name);
+            if (!worksheet->vba_codename) {
+                lxw_snprintf(codename, LXW_MAX_SHEETNAME_LENGTH, "Sheet%d",
+                             worksheet->index + 1);
+
+                worksheet_set_vba_name(worksheet, codename);
+            }
         }
     }
+
+    /* Prepare the worksheet VML elements such as comments. */
+    _prepare_vml(self);
 
     /* Set the defined names for the worksheets such as Print Titles. */
     _prepare_defined_names(self);
@@ -1902,6 +2035,8 @@ workbook_set_properties(lxw_workbook *self, lxw_doc_properties *user_props)
         doc_props->hyperlink_base = lxw_strdup(user_props->hyperlink_base);
         GOTO_LABEL_ON_MEM_ERROR(doc_props->hyperlink_base, mem_error);
     }
+
+    doc_props->created = user_props->created;
 
     self->properties = doc_props;
 
@@ -2151,6 +2286,27 @@ workbook_get_chartsheet_by_name(lxw_workbook *self, const char *name)
 }
 
 /*
+ * Get the default URL format.
+ */
+lxw_format *
+workbook_get_default_url_format(lxw_workbook *self)
+{
+    return self->default_url_format;
+}
+
+/*
+ * Unset the default URL format.
+ */
+void
+workbook_unset_default_url_format(lxw_workbook *self)
+{
+    self->default_url_format->hyperlink = LXW_FALSE;
+    self->default_url_format->xf_id = 0;
+    self->default_url_format->underline = LXW_UNDERLINE_NONE;
+    self->default_url_format->theme = 0;
+}
+
+/*
  * Validate the worksheet name based on Excel's rules.
  */
 lxw_error
@@ -2198,7 +2354,7 @@ workbook_add_vba_project(lxw_workbook *self, const char *filename)
     }
 
     /* Check that the vbaProject file exists and can be opened. */
-    filehandle = fopen(filename, "rb");
+    filehandle = lxw_fopen(filename, "rb");
     if (!filehandle) {
         LXW_WARN_FORMAT1("workbook_add_vba_project(): "
                          "file doesn't exist or can't be opened: %s.",

@@ -1,7 +1,7 @@
 /*
  * libxlsxwriter
  *
- * Copyright 2014-2019, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
+ * Copyright 2014-2020, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
  */
 
 /**
@@ -9,7 +9,7 @@
  *
  * @brief Common functions and defines for the libxlsxwriter library.
  *
- * <!-- Copyright 2014-2019, John McNamara, jmcnamara@cpan.org -->
+ * <!-- Copyright 2014-2020, John McNamara, jmcnamara@cpan.org -->
  *
  */
 #ifndef __LXW_COMMON_H__
@@ -23,6 +23,14 @@
 #define STATIC static
 #else
 #define STATIC
+#endif
+
+#if __GNUC__ >= 5
+#define DEPRECATED(func, msg) func __attribute__ ((deprecated(msg)))
+#elif defined(_MSC_VER)
+#define DEPRECATED(func, msg) __declspec(deprecated, msg) func
+#else
+#define DEPRECATED(func, msg) func
 #endif
 
 /** Integer data type to represent a row value. Equivalent to `uint32_t`.
@@ -86,6 +94,9 @@ typedef enum lxw_error {
     /** Unknown zip error when closing xlsx file. */
     LXW_ERROR_ZIP_CLOSE,
 
+    /** Feature is not currently supported in this configuration. */
+    LXW_ERROR_FEATURE_NOT_SUPPORTED,
+
     /** NULL function parameter ignored. */
     LXW_ERROR_NULL_PARAMETER_IGNORED,
 
@@ -125,6 +136,9 @@ typedef enum lxw_error {
     /** Worksheet row or column index out of range. */
     LXW_ERROR_WORKSHEET_INDEX_OUT_OF_RANGE,
 
+    /** Maximum hyperlink length (2079) exceeded. */
+    LXW_ERROR_WORKSHEET_MAX_URL_LENGTH_EXCEEDED,
+
     /** Maximum number of worksheet URLs (65530) exceeded. */
     LXW_ERROR_WORKSHEET_MAX_NUMBER_URLS_EXCEEDED,
 
@@ -163,6 +177,9 @@ enum lxw_custom_property_types {
     LXW_CUSTOM_BOOLEAN,
     LXW_CUSTOM_DATETIME
 };
+
+/* Size of MD5 byte arrays. */
+#define LXW_MD5_SIZE              16
 
 /* Excel sheetname max of 31 chars. */
 #define LXW_SHEETNAME_MAX         31

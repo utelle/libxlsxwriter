@@ -2,7 +2,7 @@
 #
 # Makefile for libxlsxwriter functional test executables.
 #
-# Copyright 2014-2019, John McNamara, jmcnamara@cpan.org
+# Copyright 2014-2020, John McNamara, jmcnamara@cpan.org
 #
 
 # Keep the output quiet by default.
@@ -11,6 +11,7 @@ ifdef V
 Q=
 endif
 
+
 # Directory variables.
 INC_DIR     = ../../../include
 
@@ -18,7 +19,8 @@ INC_DIR     = ../../../include
 CFLAGS += -g -Wall -Wextra
 
 # Source files to compile.
-SRCS = $(wildcard *.c)
+SRCTESTFILES ?= *.c
+SRCS = $(wildcard $(SRCTESTFILES))
 EXES = $(patsubst %.c,%,$(SRCS))
 
 LIBXLSXWRITER = ../../../src/libxlsxwriter.a
