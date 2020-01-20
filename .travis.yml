@@ -36,3 +36,4 @@ script:
   - sudo make install USE_DOUBLE_FUNCTION=1 V=1
   - sudo make uninstall USE_DOUBLE_FUNCTION=1 V=1
   - make test_cmake USE_DOUBLE_FUNCTION=1 V=1
+  - make clean USE_DOUBLE_FUNCTION=1 V=1

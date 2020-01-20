@@ -218,6 +218,27 @@ enum lxw_comment_display_types {
     LXW_COMMENT_DISPLAY_VISIBLE
 };
 
+/** Options to control the positioning of worksheet objects such as images
+ *  or charts. See @ref working_with_object_positioning. */
+enum lxw_object_position {
+
+    /** Default positioning for the object. */
+    LXW_OBJECT_POSITION_DEFAULT,
+
+    /** Move and size with the worksheet object with the cells. */
+    LXW_OBJECT_MOVE_AND_SIZE,
+
+    /** Move but don't size with the worksheet object with the cells. */
+    LXW_OBJECT_MOVE_DONT_SIZE,
+
+    /** Don't move or size the worksheet object with the cells. */
+    LXW_OBJECT_DONT_MOVE_DONT_SIZE,
+
+    /** Same as #LXW_OBJECT_MOVE_AND_SIZE except libxlsxwriter applies hidden
+     *  cells after the object is inserted. */
+    LXW_OBJECT_MOVE_AND_SIZE_AFTER
+};
+
 enum cell_types {
     NUMBER_CELL = 1,
     STRING_CELL,
@@ -602,7 +623,8 @@ typedef struct lxw_image_options {
     /** Y scale of the image as a decimal. */
     double y_scale;
 
-    /** Object position - not implemented yet.  Set to 0.*/
+    /** Object position - use one of the values of #lxw_object_position.
+     *  See @ref working_with_object_positioning.*/
     uint8_t object_position;
 
     /** Optional description of the image. Defaults to the image filename
@@ -638,7 +660,8 @@ typedef struct lxw_chart_options {
     /** Y scale of the chart as a decimal. */
     double y_scale;
 
-    /** Object position - not implemented yet. Set to 0. */
+    /** Object position - use one of the values of #lxw_object_position.
+     *  See @ref working_with_object_positioning.*/
     uint8_t object_position;
 
 } lxw_chart_options;
@@ -2064,7 +2087,7 @@ lxw_error worksheet_set_column_opt(lxw_worksheet *worksheet,
  * default height changed due to a font that is larger than the default font
  * size or that has text wrapping turned on. To avoid this you should
  * explicitly set the height of the row using `worksheet_set_row()` if it
- * crosses an inserted image.
+ * crosses an inserted image. See @ref working_with_object_positioning.
  *
  * BMP images are only supported for backward compatibility. In general it is
  * best to avoid BMP images since they aren't compressed. If used, BMP images
