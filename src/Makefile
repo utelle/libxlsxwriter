@@ -18,10 +18,25 @@ PREFIX  ?= /usr/local
 OBJS_DIR    = .
 INC_DIR     = ../include
 
+ifdef USE_DOUBLE_FUNCTION
+
 # The emyg directory.
+ifdef USE_DTOA_EMYG
+CFLAGS += -DUSE_DTOA_EMYG
 EMYG_DIR = ../third_party/emyg
 EMYG_OBJ = $(EMYG_DIR)/emyg_dtoa.o
 EMYG_SO  = $(EMYG_DIR)/emyg_dtoa.so
+endif
+
+# The ryu directory.
+ifdef USE_DTOA_RYU
+CFLAGS += -DUSE_DTOA_RYU
+RYU_DIR = ../third_party/ryu
+RYU_OBJ = $(RYU_DIR)/d2s.o
+RYU_SO  = $(RYU_DIR)/d2s.so
+endif
+
+endif
 
 LIBS = -lz
 
@@ -139,7 +154,7 @@ test_lib : libxlsxwriter_test.a
 
 # The static library.
 $(LIBXLSXWRITER_A) : $(OBJS)
-	$(Q)$(AR) $(ARFLAGS) $@ $(EMYG_OBJ) $(MINIZIP_OBJ) $(TMPFILEPLUS_OBJ) $(MD5_OBJ) $^
+	$(Q)$(AR) $(ARFLAGS) $@ $(EMYG_OBJ) $(RYU_OBJ) $(MINIZIP_OBJ) $(TMPFILEPLUS_OBJ) $(MD5_OBJ) $^
 
 # The dynamic library.
 ifeq ($(findstring m32,$(CFLAGS)),m32)
@@ -147,11 +162,11 @@ ARCH = -m32
 endif
 
 $(LIBXLSXWRITER_SO) : $(SOBJS)
-	$(Q)$(CC) $(LDFLAGS) $(SOFLAGS) $(ARCH) -o $@ $(EMYG_SO) $(MINIZIP_SO) $(TMPFILEPLUS_SO) $(MD5_SO) $^ $(LIBS)
+	$(Q)$(CC) $(LDFLAGS) $(SOFLAGS) $(ARCH) -o $@ $(EMYG_SO) $(RYU_SO) $(MINIZIP_SO) $(TMPFILEPLUS_SO) $(MD5_SO) $^ $(LIBS)
 
 # The test library.
 $(LIBXLSXWRITER_TO) : $(TOBJS)
-	$(Q)$(AR) $(ARFLAGS) $@ $(EMYG_OBJ) $(MINIZIP_OBJ) $(TMPFILEPLUS_OBJ) $(MD5_OBJ) $^
+	$(Q)$(AR) $(ARFLAGS) $@ $(EMYG_OBJ) $(RYU_OBJ) $(MINIZIP_OBJ) $(TMPFILEPLUS_OBJ) $(MD5_OBJ) $^
 
 # Minimal target for quick compile without creating the libs.
 test_compile : $(OBJS)

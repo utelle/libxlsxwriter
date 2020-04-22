@@ -21,7 +21,14 @@ PYTESTFILES ?= test
 
 # Build the libs.
 all :
+ifdef USE_DOUBLE_FUNCTION
+ifdef USE_DTOA_EMYG
 	$(Q)$(MAKE) -C third_party/emyg
+endif
+ifdef USE_DTOA_RYU
+	$(Q)$(MAKE) -C third_party/ryu
+endif
+endif
 ifndef USE_SYSTEM_MINIZIP
 	$(Q)$(MAKE) -C third_party/minizip
 endif
@@ -43,7 +50,14 @@ clean :
 	$(Q)$(MAKE) clean -C test/unit
 	$(Q)$(MAKE) clean -C test/functional/src
 	$(Q)$(MAKE) clean -C examples
+ifdef USE_DOUBLE_FUNCTION
+ifdef USE_DTOA_EMYG
 	$(Q)$(MAKE) clean -C third_party/emyg
+endif
+ifdef USE_DTOA_RYU
+	$(Q)$(MAKE) clean -C third_party/ryu
+endif
+endif
 	$(Q)rm -rf docs/html
 	$(Q)rm -rf test/functional/__pycache__
 	$(Q)rm -f  test/functional/*.pyc
@@ -75,7 +89,14 @@ test_functional : all
 # Run all tests.
 test_unit :
 	@echo "Compiling unit tests ..."
+ifdef USE_DOUBLE_FUNCTION
+ifdef USE_DTOA_EMYG
 	$(Q)$(MAKE) -C third_party/emyg
+endif
+ifdef USE_DTOA_RYU
+	$(Q)$(MAKE) -C third_party/ryu
+endif
+endif
 ifndef USE_SYSTEM_MINIZIP
 	$(Q)$(MAKE) -C third_party/minizip
 endif
@@ -143,7 +164,14 @@ strip:
 
 # Run a coverity static analysis.
 coverity:
+ifdef USE_DOUBLE_FUNCTION
+ifdef USE_DTOA_EMYG
 	$(Q)$(MAKE) -C third_party/emyg
+endif
+ifdef USE_DTOA_RYU
+	$(Q)$(MAKE) -C third_party/ryu
+endif
+endif
 ifndef USE_SYSTEM_MINIZIP
 	$(Q)$(MAKE) -C third_party/minizip
 endif
@@ -164,7 +192,14 @@ endif
 
 # Run a scan-build static analysis.
 scan_build:
+ifdef USE_DOUBLE_FUNCTION
+ifdef USE_DTOA_EMYG
 	$(Q)$(MAKE) -C third_party/emyg
+endif
+ifdef USE_DTOA_RYU
+	$(Q)$(MAKE) -C third_party/ryu
+endif
+endif
 ifndef USE_SYSTEM_MINIZIP
 	$(Q)$(MAKE) -C third_party/minizip
 endif

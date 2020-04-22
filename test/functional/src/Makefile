@@ -34,12 +34,25 @@ endif
 # Use a user-defined double number formatting function.
 ifdef USE_DOUBLE_FUNCTION
 CFLAGS += -DUSE_DOUBLE_FUNCTION
+ifdef USE_DTOA_EMYG
+CFLAGS += -DUSE_DTOA_EMYG
+endif
+ifdef USE_DTOA_RYU
+CFLAGS += -DUSE_DTOA_RYU
+endif
 endif
 
 all : $(LIBXLSXWRITER) $(EXES)
 
 $(LIBXLSXWRITER):
+ifdef USE_DOUBLE_FUNCTION
+ifdef USE_DTOA_EMYG
 	$(Q)$(MAKE) -C ../../../third_party/emyg
+endif
+ifdef USE_DTOA_RYU
+	$(Q)$(MAKE) -C ../../../third_party/ryu
+endif
+endif
 ifndef USE_SYSTEM_MINIZIP
 	$(Q)$(MAKE) -C ../../../third_party/minizip
 endif

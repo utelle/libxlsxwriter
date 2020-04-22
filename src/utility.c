@@ -541,6 +541,7 @@ lxw_tmpfile(char *tmpdir)
  */
 #ifdef USE_DOUBLE_FUNCTION
 
+#ifdef USE_DTOA_EMYG
 #include "../third_party/emyg/emyg_dtoa.h"
 
 int
@@ -552,6 +553,22 @@ lxw_sprintf_dbl(char *data, double number)
     data[LXW_ATTR_32-1] = 0;
     return 0;
 }
+#endif
+
+#ifdef USE_DTOA_RYU
+#include "../third_party/ryu/ryu/ryu.h"
+
+int
+lxw_sprintf_dbl(char *data, double number)
+{
+    char localBuffer[256];
+    d2s_buffered(number, localBuffer);
+    strncpy(data, localBuffer, LXW_ATTR_32);
+    data[LXW_ATTR_32-1] = 0;
+    return 0;
+}
+#endif
+
 #endif
 
 /*
